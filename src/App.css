@@ -1,51 +1,5 @@
-:root {
-  --emv-navy: #0d3e5c;
-  --emv-lime: #9bc842;
-  --emv-slate: #8890a3;
-  --emv-ink: #08141d;
-  --emv-deep: #102536;
-  --emv-panel: #132b3d;
-  --emv-line: rgba(136, 144, 163, 0.26);
-  --accent-primary: var(--emv-navy);
-  --accent-secondary: var(--emv-lime);
-  --accent-muted: var(--emv-slate);
-  --bg-primary: #0b1620;
-  --bg-secondary: #0f1f2d;
-  --bg-tertiary: #14293b;
-  --bg-glass: rgba(15, 31, 45, 0.88);
-  --border-color: rgba(136, 144, 163, 0.2);
-  --border-active: rgba(155, 200, 66, 0.42);
-  --text-primary: #eef4f8;
-  --text-secondary: #c3cfda;
-  --text-muted: #94a5b6;
-  --shadow-sm: 0 6px 18px rgba(4, 12, 18, 0.14);
-  --shadow-md: 0 12px 28px rgba(4, 12, 18, 0.18);
-  --shadow-lg: 0 18px 40px rgba(4, 12, 18, 0.22);
-}
+/* Consolidated variables are located in index.css */
 
-.light-theme {
-  --accent-primary: var(--emv-navy);
-  --accent-secondary: #86b32d;
-  --accent-muted: var(--emv-slate);
-  --bg-primary: #eef3f6;
-  --bg-secondary: #f8fbfd;
-  --bg-tertiary: #ffffff;
-  --bg-glass: rgba(248, 251, 253, 0.94);
-  --border-color: rgba(13, 62, 92, 0.12);
-  --border-active: rgba(13, 62, 92, 0.28);
-  --text-primary: #102536;
-  --text-secondary: #375166;
-  --text-muted: #64768a;
-  --shadow-sm: 0 8px 16px rgba(13, 62, 92, 0.05);
-  --shadow-md: 0 12px 30px rgba(13, 62, 92, 0.08);
-  --shadow-lg: 0 18px 44px rgba(13, 62, 92, 0.12);
-}
-
-body {
-  background:
-    radial-gradient(circle at top left, rgba(155, 200, 66, 0.06), transparent 22%),
-    linear-gradient(180deg, #08141d 0%, #0b1620 100%);
-}
 
 .scenario-toolbar {
   display: flex;
@@ -55,7 +9,7 @@ body {
   padding: 10px 16px;
   border-bottom: 1px solid var(--border-color);
   background:
-    linear-gradient(180deg, rgba(155, 200, 66, 0.06), transparent),
+    linear-gradient(180deg, var(--accent-secondary-bg-trans), transparent),
     var(--bg-glass);
   backdrop-filter: blur(12px);
   flex-shrink: 0;
@@ -86,8 +40,8 @@ body {
   height: 28px;
   padding: 0 10px;
   border-radius: 8px;
-  border: 1px solid rgba(155, 200, 66, 0.24);
-  background: rgba(155, 200, 66, 0.08);
+  border: 1px solid var(--accent-secondary-border-trans);
+  background: var(--accent-secondary-bg-trans);
   color: var(--accent-secondary);
   font-size: 11px;
   font-weight: 700;
@@ -97,8 +51,8 @@ body {
 }
 
 .scenario-toolbar-toggle:hover {
-  border-color: rgba(155, 200, 66, 0.4);
-  background: rgba(155, 200, 66, 0.12);
+  border-color: var(--accent-secondary);
+  background: var(--accent-secondary-bg-trans);
 }
 
 /* The "Scenario" text inside the toolbar toggle. Inherits the
@@ -172,13 +126,13 @@ body {
 
 .scenario-preset-btn:hover {
   transform: translateY(-1px);
-  border-color: rgba(155, 200, 66, 0.28);
+  border-color: var(--accent-secondary-border-trans);
   box-shadow: var(--shadow-md);
 }
 
 .scenario-preset-btn.active {
-  border-color: rgba(155, 200, 66, 0.38);
-  background: linear-gradient(180deg, rgba(155, 200, 66, 0.08), transparent), var(--bg-secondary);
+  border-color: var(--accent-secondary);
+  background: linear-gradient(180deg, var(--accent-secondary-bg-trans), transparent), var(--bg-secondary);
 }
 
 .scenario-preset-label {
@@ -252,11 +206,6 @@ body {
   }
 }
 
-body.light-theme {
-  background:
-    radial-gradient(circle at top left, rgba(155, 200, 66, 0.08), transparent 18%),
-    linear-gradient(180deg, #eef3f6 0%, #e7edf2 100%);
-}
 
 .app-header {
   height: 56px;
@@ -376,8 +325,8 @@ body.light-theme {
 .theme-toggle-btn:hover,
 .phase-pill:hover {
   color: var(--text-primary);
-  border-color: rgba(155, 200, 66, 0.35);
-  background: rgba(155, 200, 66, 0.06);
+  border-color: var(--accent-secondary-border-trans);
+  background: var(--accent-secondary-bg-trans);
 }
 
 .spec-badge,
@@ -404,16 +353,16 @@ body.light-theme {
 .header-chip-status.status-y,
 .header-chip-status.status-a,
 .header-chip-status.status-s {
-  border-color: rgba(155, 200, 66, 0.34);
-  color: #d7f2a5;
-  background: rgba(155, 200, 66, 0.08);
+  border-color: var(--accent-secondary-border-trans);
+  color: var(--accent-secondary);
+  background: var(--accent-secondary-bg-trans);
 }
 
 .light-theme .header-chip-status.status-y,
 .light-theme .header-chip-status.status-a,
 .light-theme .header-chip-status.status-s {
-  color: #46611a;
-  background: rgba(155, 200, 66, 0.12);
+  color: var(--accent-secondary);
+  background: var(--accent-secondary-bg-trans);
 }
 
 .header-chip-status.status-c,
@@ -472,7 +421,7 @@ body.light-theme {
 .phase-pill.active {
   color: var(--text-primary);
   background: rgba(13, 62, 92, 0.22);
-  border-color: rgba(155, 200, 66, 0.34);
+  border-color: var(--accent-secondary-border-trans);
 }
 
 .phase-pill-swatch {
@@ -701,7 +650,7 @@ body.light-theme {
 }
 
 .timeline-step.current {
-  border-left-color: rgba(155, 200, 66, 0.38) !important;
+  border-left-color: var(--accent-secondary) !important;
   background: rgba(13, 62, 92, 0.16) !important;
 }
 
@@ -716,7 +665,7 @@ body.light-theme {
 
 .timeline-dot.current {
   background: var(--accent-secondary);
-  box-shadow: 0 0 0 4px rgba(155, 200, 66, 0.14);
+  box-shadow: 0 0 0 4px var(--accent-secondary-bg-trans);
 }
 
 .panel-toggle-btn {
@@ -758,11 +707,11 @@ body.light-theme {
    accent palette instead of using the cold zinc default. */
 .fingerprint-widget {
   background: rgba(8, 20, 29, 0.92);
-  border: 1px solid rgba(155, 200, 66, 0.32);
+  border: 1px solid var(--accent-secondary-border-trans);
 }
 
 .widget-progress-bar-fill {
-  background: linear-gradient(90deg, var(--accent-secondary), #c7e46c);
+  background: linear-gradient(90deg, var(--accent-secondary), var(--accent-primary));
 }
 
 @media (max-width: 1100px) {

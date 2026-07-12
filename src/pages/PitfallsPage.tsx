@@ -96,8 +96,8 @@ export function PitfallsPage() {
     description:
       'A pragmatic, versioned list of EMV 3-D Secure implementation pitfalls, with detection strategies and EMVCo spec anchors.',
     inLanguage: 'en',
-    author: { '@id': 'https://emv-3ds-lab.github.io/#author' },
-    publisher: { '@id': 'https://emv-3ds-lab.github.io/#website' },
+    author: { '@id': 'https://cnpshield.github.io/3dslab/#author' },
+    publisher: { '@id': 'https://cnpshield.github.io/3dslab/#website' },
     about: ['EMV 3DS', 'implementation pitfalls', 'payment security', 'protocol analysis'],
   };
 

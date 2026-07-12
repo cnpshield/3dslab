@@ -122,8 +122,8 @@ export function FlowsPage() {
     description:
       'Side-by-side comparison of the EMV 3-D Secure frictionless, challenge, and 3RI flows, with step lists, security notes, and EMVCo spec anchors.',
     inLanguage: 'en',
-    author: { '@id': 'https://emv-3ds-lab.github.io/#author' },
-    publisher: { '@id': 'https://emv-3ds-lab.github.io/#website' },
+    author: { '@id': 'https://cnpshield.github.io/3dslab/#author' },
+    publisher: { '@id': 'https://cnpshield.github.io/3dslab/#website' },
     about: ['EMV 3DS', 'frictionless flow', 'challenge flow', '3RI'],
     keywords: 'EMV 3DS challenge flow, frictionless flow, 3RI flow, AReq, CReq, RReq',
   };

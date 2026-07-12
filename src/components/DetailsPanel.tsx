@@ -1151,7 +1151,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
 
         {isStepContext && activeTab === 'security' && securityLensEnabled && enrichedSecurityLensNote && (
           <div className="tab-pane fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto' }}>
-            <div className="context-banner" style={{ background: 'rgba(155, 200, 66, 0.08)', border: '1px solid rgba(155, 200, 66, 0.28)', borderLeft: '4px solid var(--accent-secondary)', borderRadius: '6px', padding: '10px 12px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+            <div className="context-banner" style={{ background: 'var(--accent-secondary-bg-trans)', border: '1px solid var(--accent-secondary-border-trans)', borderLeft: '4px solid var(--accent-secondary)', borderRadius: '6px', padding: '10px 12px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
               <Shield size={18} style={{ color: 'var(--accent-secondary)', flexShrink: 0, marginTop: '2px' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '9.5px', fontWeight: '800', color: 'var(--accent-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Security Research Lens</div>

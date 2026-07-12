@@ -44,7 +44,6 @@ interface ControlsProps {
   setIsPlaying: (playing: boolean) => void;
   playSpeed: number;
   setPlaySpeed: (speed: number) => void;
-  activeStepLabel: string;
   activeStepNum: string;
   activeSteps: FlowStep[];
 }
@@ -59,7 +58,6 @@ export const Controls: React.FC<ControlsProps> = memo(({
   setIsPlaying,
   playSpeed,
   setPlaySpeed,
-  activeStepLabel,
   activeStepNum,
   activeSteps,
 }) => {
@@ -249,59 +247,51 @@ export const Controls: React.FC<ControlsProps> = memo(({
       </div>
 
       {activeTab === 'timeline' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflow: 'hidden' }} className="fade-in">
-          {/* Step-by-step Autoplay Controls */}
-          <div className="control-group player-group" style={{ padding: '14px', gap: '10px' }}>
-            <div className="player-meta">
-              <div className="step-counter">
-                Step <span className="counter-current">{currentStepIndex + 1}</span> of {totalSteps}
-              </div>
-              <div className="active-step-badge">
-                Step {activeStepNum}
-              </div>
-            </div>
-
-            <div className="active-step-label-container" style={{ padding: '6px 12px', height: '44px' }}>
-              <div className="active-step-label" style={{ fontSize: '12px' }}>{activeStepLabel}</div>
-            </div>
-
-            <div className="player-bar" style={{ gap: '10px' }}>
-              <div className="player-buttons">
+        <div className="control-group timeline-group fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '14px', gap: '10px' }}>
+          
+          {/* Combined Compact Playback Bar */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <button 
                   onClick={handleReset} 
                   className="player-btn" 
                   title="Reset to Step 1"
                   disabled={currentStepIndex === 0}
+                  style={{ width: '28px', height: '28px', padding: 0 }}
                 >
-                  <RotateCcw size={15} />
+                  <RotateCcw size={13} />
                 </button>
                 <button 
                   onClick={handlePrev} 
                   className="player-btn" 
                   title="Previous Step"
                   disabled={currentStepIndex === 0}
+                  style={{ width: '28px', height: '28px', padding: 0 }}
                 >
-                  <ChevronLeft size={17} />
+                  <ChevronLeft size={15} />
                 </button>
                 <button 
                   onClick={togglePlay} 
                   className={`player-btn play-pause-btn ${isPlaying ? 'playing' : ''}`}
                   title={isPlaying ? 'Pause Autoplay' : 'Start Autoplay'}
+                  style={{ width: '32px', height: '32px', padding: 0 }}
                 >
-                  {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" style={{ marginLeft: '1px' }} />}
+                  {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" style={{ marginLeft: '1px' }} />}
                 </button>
                 <button 
                   onClick={handleNext} 
                   className="player-btn" 
                   title="Next Step"
                   disabled={currentStepIndex === totalSteps - 1}
+                  style={{ width: '28px', height: '28px', padding: 0 }}
                 >
-                  <ChevronRight size={17} />
+                  <ChevronRight size={15} />
                 </button>
               </div>
 
-              <div className="speed-control">
-                <span className="speed-label" style={{ fontSize: '11px' }}>Speed:</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Speed:</span>
                 <input 
                   type="range" 
                   min="1500" 
@@ -309,14 +299,15 @@ export const Controls: React.FC<ControlsProps> = memo(({
                   step="500"
                   value={playSpeed} 
                   onChange={(e) => setPlaySpeed(Number(e.target.value))}
-                  className="speed-slider" 
+                  className="speed-slider"
+                  style={{ width: '48px', height: '3px', margin: 0 }}
                 />
-                <span className="speed-val" style={{ fontSize: '11px' }}>{(playSpeed / 1000).toFixed(1)}s</span>
+                <span className="speed-val" style={{ fontSize: '10px', fontWeight: 600 }}>{(playSpeed / 1000).toFixed(1)}s</span>
               </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="progress-container" onClick={(e) => {
+            {/* Clickable Progress Bar */}
+            <div className="progress-container" style={{ height: '4px', margin: '2px 0 4px 0' }} onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               const clickX = e.clientX - rect.left;
               const percentage = clickX / rect.width;
@@ -328,15 +319,16 @@ export const Controls: React.FC<ControlsProps> = memo(({
                 style={{ width: `${((currentStepIndex + 1) / totalSteps) * 100}%` }}
               />
             </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '10.5px', color: 'var(--text-muted)', fontWeight: 600 }}>
+              <span>Step {currentStepIndex + 1} of {totalSteps}</span>
+              <span className="active-step-badge" style={{ fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Step {activeStepNum}</span>
+            </div>
           </div>
 
-          {/* Interactive Vertical Timeline Checklist */}
-          <div className="control-group timeline-group" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '14px' }}>
-            <h3 className="group-title" style={{ paddingBottom: '8px', marginBottom: '4px' }}>
-              <Compass size={14} className="title-icon" />
-              Protocol Walkthrough
-            </h3>
-            <div className="timeline-container" style={{ flex: 1, overflowY: 'auto' }}>
+          {/* Timeline Steps Checklist */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderTop: '1px solid var(--border-color)', paddingTop: '10px', marginTop: '4px' }}>
+            <div className="timeline-container" style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
               {activeSteps.map((step, idx) => {
                 const isPast = idx < currentStepIndex;
                 const isCurrent = idx === currentStepIndex;

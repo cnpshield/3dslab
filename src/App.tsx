@@ -75,8 +75,8 @@ const STEP_RAIL_X = -50;
 // the per-step position from the URL and warn the user.
 const SHARE_URL_BUDGET_BYTES = 4 * 1024;
 const PROJECT_AUTHOR_LABEL = 'Wasif Faisal, BRAC University';
-const PROJECT_REPO_URL = 'https://github.com/emv-3ds-lab/emv-3ds-lab.github.io';
-const PROJECT_REPO_LABEL = 'emv-3ds-lab/emv-3ds-lab.github.io';
+const PROJECT_REPO_URL = 'https://github.com/cnpshield/3dslab';
+const PROJECT_REPO_LABEL = 'cnpshield/3dslab';
 const PROJECT_LINKEDIN_URL = 'https://www.linkedin.com/in/cswasif/';
 const PROJECT_LINKEDIN_LABEL = 'linkedin.com/in/cswasif';
 
@@ -298,17 +298,15 @@ function AppContent() {
     }
   }, []);
 
-  // When playback advances, if the user is currently viewing the same step,
-  // follow playback. If they have selected a different context, leave it.
+  // When playback advances or manual stepping occurs, keep the details panel context
+  // in sync with the active step so the details pane always describes what is visible in the graph.
   useEffect(() => {
     if (detailsContext.kind !== 'step') return;
     const current = activeSteps[currentStepIndex];
     if (!current || current.id === detailsContext.stepId) return;
-    if (isPlaying || detailsContext.stepId === 'step_0A') {
-      uiActions.setDetailsContext({ kind: 'step', stepId: current.id });
-    }
+    uiActions.setDetailsContext({ kind: 'step', stepId: current.id });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStepIndex, isPlaying]);
+  }, [currentStepIndex]);
 
   // If hiding a phase drops the step list beneath the current index, clamp down.
   useEffect(() => {
@@ -507,31 +505,32 @@ function AppContent() {
     flowStore.setState((s) => ({ ...s, hiddenGroups: [...all] }));
   }, []);
 
-  // Focus management: when the active step changes, focus its DOM node
-  // so keyboard users and screen readers get a focus ring + announcement.
-  // We do this by querying the rendered DOM for the data-step-state
-  // attribute (set in CustomNode.tsx), which is more robust than holding
-  // a React ref because the xyflow node DOM is created by xyflow, not by
-  // our React tree.
+  // Camera glide management: when the active step changes, smoothly glide the viewport
+  // to center on the active interaction (the source/target participant columns)
+  // at a comfortable zoom level (0.85) so the node content is fully legible.
   const reactFlow = useReactFlow();
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const currentNode = document.querySelector(
       '[data-step-state="current"][role="button"]'
     ) as HTMLElement | null;
-    if (!currentNode) return;
-    currentNode.focus({ preventScroll: true });
-    // Make sure the focused node is in the viewport (xyflow v12 does
-    // not auto-pan on focus by default). Skip if user is mid-pan/zoom.
-    if (!isPlaying) {
-      try {
-        reactFlow.fitView({ nodes: [{ id: currentNode.getAttribute('data-id') || '' }], padding: 0.18, duration: 280, maxZoom: 1.1 });
-      } catch {
-        // If fitView fails (no node id available, etc.), silently skip.
-      }
+    if (currentNode) {
+      currentNode.focus({ preventScroll: true });
+    }
+
+    if (!currentStep) return;
+    const sourceX = X_COORDS[currentStep.source as keyof typeof X_COORDS] ?? 150;
+    const targetX = currentStep.target ? (X_COORDS[currentStep.target as keyof typeof X_COORDS] ?? sourceX) : sourceX;
+    const centerX = (sourceX + targetX) / 2;
+    const centerY = 140 + currentStepIndex * 90;
+
+    try {
+      reactFlow.setCenter(centerX, centerY + 30, { zoom: 0.85, duration: 320 });
+    } catch {
+      // Fallback silently if reactFlow is not ready.
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStepIndex]);
+  }, [currentStepIndex, currentStep, reactFlow]);
 
   // === Build the graph. We split nodes and edges into two useMemo
   // === invocations so each one returns a stable array reference, not a
@@ -989,7 +988,7 @@ function AppContent() {
   }, []);
 
   const handleStepSelectFromTimeline = useCallback((idx: number) => {
-    flowActions.togglePlay();
+    flowStore.setState({ isPlaying: false });
     flowActions.setCurrentStepIndex(idx);
     uiActions.setRightCollapsed(false);
     const step = flowStore.getState().activeSteps[idx];
@@ -1164,7 +1163,7 @@ function AppContent() {
             {scenario.transStatus}
           </span>
           {securityLensEnabled && (
-            <span className="header-chip" style={{ color: 'var(--accent-secondary)', borderColor: 'rgba(155, 200, 66, 0.34)', background: 'rgba(155, 200, 66, 0.08)' }}>
+            <span className="header-chip" style={{ color: 'var(--accent-secondary)', borderColor: 'var(--accent-secondary-border-trans)', background: 'var(--accent-secondary-bg-trans)' }}>
               Research Lens
             </span>
           )}
@@ -1268,8 +1267,8 @@ function AppContent() {
             aria-pressed={securityLensEnabled}
             style={securityLensEnabled ? {
               color: 'var(--accent-secondary)',
-              borderColor: 'rgba(155, 200, 66, 0.35)',
-              background: 'rgba(155, 200, 66, 0.08)'
+              borderColor: 'var(--accent-secondary-border-trans)',
+              background: 'var(--accent-secondary-bg-trans)'
             } : undefined}
           >
             <Crosshair size={14} aria-hidden="true" />
@@ -1394,7 +1393,7 @@ function AppContent() {
       <main
         className="dashboard-grid"
         style={{
-          gridTemplateColumns: `${isLeftCollapsed ? '0px' : '380px'} 1fr ${isRightCollapsed ? '0px' : '390px'}`,
+          gridTemplateColumns: `${isLeftCollapsed ? '0px' : '320px'} 1fr ${isRightCollapsed ? '0px' : '350px'}`,
           transition: 'grid-template-columns 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
         }}
       >
@@ -1410,7 +1409,6 @@ function AppContent() {
             setIsPlaying={(p: boolean) => p ? flowActions.togglePlay() : (isPlaying && flowActions.togglePlay())}
             playSpeed={playSpeed}
             setPlaySpeed={(s) => flowActions.setPlaySpeed(s as 800 | 1500 | 2500 | 5000)}
-            activeStepLabel={currentStep?.label || ''}
             activeStepNum={currentStep?.num || ''}
             activeSteps={activeSteps}
           />
@@ -1561,7 +1559,7 @@ function AppContent() {
               zoomOnPinch={true}
               zoomOnDoubleClick={true}
               panOnDrag={true}
-              preventScrolling={false}
+              preventScrolling={true}
               onlyRenderVisibleElements={true}
               role="graphics-document"
               aria-label="EMV 3DS sequence diagram"

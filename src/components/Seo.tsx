@@ -36,7 +36,7 @@ export interface SeoConfig {
 }
 
 const SITE_NAME = 'EMV 3DS Protocol Lab';
-const CANONICAL_ORIGIN = 'https://emv-3ds-lab.github.io';
+const CANONICAL_ORIGIN = 'https://cnpshield.github.io/3dslab';
 const OG_IMAGE = `${CANONICAL_ORIGIN}/og-image.png`;
 const DEFAULT_ROBOTS = 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1';
 

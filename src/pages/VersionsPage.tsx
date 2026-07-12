@@ -80,8 +80,8 @@ export function VersionsPage() {
     description:
       'Field-level matrix of EMV 3-D Secure v2.1.0, v2.2.0, and v2.3.1 message shapes, derived from a versioned payload registry with field-level provenance.',
     inLanguage: 'en',
-    author: { '@id': 'https://emv-3ds-lab.github.io/#author' },
-    publisher: { '@id': 'https://emv-3ds-lab.github.io/#website' },
+    author: { '@id': 'https://cnpshield.github.io/3dslab/#author' },
+    publisher: { '@id': 'https://cnpshield.github.io/3dslab/#website' },
     about: ['EMV 3DS', 'EMV 3-D Secure', 'protocol analysis', 'payment security'],
     keywords: 'EMV 3DS version matrix, AReq, ARes, CReq, CRes, RReq, RRes, 2.1.0, 2.2.0, 2.3.1',
   };

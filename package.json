@@ -13,11 +13,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/emv-3ds-lab/emv-3ds-lab.github.io.git"
+    "url": "git+https://github.com/cnpshield/3dslab.git"
   },
-  "homepage": "https://emv-3ds-lab.github.io",
+  "homepage": "https://cnpshield.github.io/3dslab",
   "bugs": {
-    "url": "https://github.com/emv-3ds-lab/emv-3ds-lab.github.io/issues"
+    "url": "https://github.com/cnpshield/3dslab/issues"
   },
   "keywords": [
     "emv-3ds",

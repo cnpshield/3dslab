@@ -10,97 +10,93 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* === EMVCo Brand Tokens (must match App.css) === */
+  /* === EMVCo Brand & Core Design Tokens === */
   --emv-navy: #0d3e5c;
-  --emv-lime: #9bc842;
+  --emv-lime: #0ea5e9; /* Upgraded to Premium Electric Cyan */
   --emv-slate: #8890a3;
-  --emv-ink: #08141d;
-  --emv-deep: #102536;
-  --emv-panel: #132b3d;
-  --emv-line: rgba(136, 144, 163, 0.26);
+  --emv-ink: #080d16;
+  --emv-deep: #0e1524;
+  --emv-panel: #161e2e;
+  --emv-line: rgba(148, 163, 184, 0.15);
 
-  /* Theme Tokens - Default Dark Mode (navy/lime brand) */
-  --accent-primary: var(--emv-navy);
-  --accent-secondary: var(--emv-lime);
+  /* Default Dark Theme - Sleek Royal/Indigo & Cyan */
+  --accent-primary: #6366f1; /* Premium Electric Indigo */
+  --accent-secondary: #0ea5e9; /* Vibrant Cyan */
   --accent-muted: var(--emv-slate);
-  --bg-primary: #0b1620;
-  --bg-secondary: #0f1f2d;
-  --bg-tertiary: #14293b;
-  --bg-glass: rgba(15, 31, 45, 0.88);
-  --border-color: rgba(136, 144, 163, 0.2);
-  --border-active: rgba(155, 200, 66, 0.42);
-  --text-primary: #eef4f8;
-  --text-secondary: #c3cfda;
-  --text-muted: #94a5b6;
+  --bg-primary: #080d16;
+  --bg-secondary: #0e1524;
+  --bg-tertiary: #161e2e;
+  --bg-glass: rgba(14, 21, 36, 0.85);
+  --border-color: rgba(148, 163, 184, 0.15);
+  --border-active: rgba(14, 165, 233, 0.45);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
 
-  --shadow-sm: 0 6px 18px rgba(4, 12, 18, 0.14);
-  --shadow-md: 0 12px 28px rgba(4, 12, 18, 0.18);
-  --shadow-lg: 0 18px 40px rgba(4, 12, 18, 0.22);
+  /* Opacity variables to avoid hardcoded RGBA in JavaScript code */
+  --accent-secondary-glow: rgba(14, 165, 233, 0.45);
+  --accent-secondary-border-trans: rgba(14, 165, 233, 0.35);
+  --accent-secondary-bg-trans: rgba(14, 165, 233, 0.08);
 
-  /* Brand-tinted "indigo replacement" so the old hard-coded #6366f1
-     surfaces get a navy-tinted alternative. */
-  --indigo-replace: #5a89b3;             /* muted navy */
-  --indigo-tint-1: rgba(13, 62, 92, 0.06);
-  --indigo-tint-2: rgba(13, 62, 92, 0.12);
-  --indigo-tint-3: rgba(13, 62, 92, 0.20);
-  --indigo-tint-4: rgba(13, 62, 92, 0.32);
-  --indigo-tint-5: rgba(13, 62, 92, 0.45);
+  --shadow-sm: 0 4px 12px rgba(2, 4, 8, 0.25);
+  --shadow-md: 0 10px 24px rgba(2, 4, 8, 0.35);
+  --shadow-lg: 0 16px 36px rgba(2, 4, 8, 0.45);
 
-  /* JSON Syntax Colors - Dark Mode (kept brand-aware) */
+  /* Brand-tinted indigo replacement */
+  --indigo-replace: #6366f1;
+  --indigo-tint-1: rgba(99, 102, 241, 0.06);
+  --indigo-tint-2: rgba(99, 102, 241, 0.12);
+  --indigo-tint-3: rgba(99, 102, 241, 0.20);
+  --indigo-tint-4: rgba(99, 102, 241, 0.32);
+  --indigo-tint-5: rgba(99, 102, 241, 0.45);
+
+  /* JSON Syntax Colors - Dark Mode */
   --json-key: #c084fc;       /* Purple */
   --json-string: #34d399;    /* Green */
   --json-number: #60a5fa;    /* Blue */
   --json-boolean: #fb923c;   /* Orange */
   --json-null: #a1a1aa;      /* Grey */
 
-  /* 3DS Brand Colors (message type accents — kept, they are *content* not chrome) */
-  --color-ch: #ea580c;
-  --color-br: #d97706;
-  --color-re: #2563eb;
-  --color-s: var(--emv-navy);
+  /* 3DS Participant Accents */
+  --color-ch: #f97316;
+  --color-br: #f59e0b;
+  --color-re: #3b82f6;
+  --color-s: #6366f1;
   --color-ds: #8b5cf6;
   --color-acs: #10b981;
 }
 
-/* === Light Theme Variables ===
-   Research-grounded palette (see commit notes / docs/ux/theming.md):
-     - Backgrounds use off-white surfaces (#f5f8fb, #fafcfd) instead of
-       clinical pure-white. Apple HIG + Material 3 guidance: pure #FFF
-       "blooms" at night and causes halation. Off-white reduces glare
-       without making the surface feel gray.
-     - Text colors are warm charcoal (#0f2535 / #3d556b / #5d7184),
-       not pure black, to soften contrast at small sizes.
-     - All body-text pairs target ≥4.5:1 (WCAG 2.1 AA), and primary
-       text is at ~13.5:1 (well past AAA 7:1).
-     - Accent secondary is a slightly darker lime (#5d8a1f) so it
-       reaches 4.5:1 on the off-white chrome — the original #86b32d
-       sat at ~3.2:1 which fails AA for normal text. */
+/* === Light Theme Variables === */
 .light-theme {
-  --accent-primary: var(--emv-navy);
-  --accent-secondary: #5d8a1f;
-  --accent-muted: #5b6c80;
-  --bg-primary: #f5f8fb;
-  --bg-secondary: #fafcfd;
+  --accent-primary: #1e3a8a;
+  --accent-secondary: #0284c7;
+  --accent-muted: #64748b;
+  --bg-primary: #f8fafc;
+  --bg-secondary: #f1f5f9;
   --bg-tertiary: #ffffff;
-  --bg-glass: rgba(255, 255, 255, 0.82);
-  --border-color: rgba(13, 62, 92, 0.10);
-  --border-active: rgba(93, 138, 31, 0.32);
-  --text-primary: #0f2535;
-  --text-secondary: #3d556b;
-  --text-muted: #5d7184;
+  --bg-glass: rgba(255, 255, 255, 0.85);
+  --border-color: rgba(15, 23, 42, 0.08);
+  --border-active: rgba(2, 132, 199, 0.32);
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
 
-  --shadow-sm: 0 4px 12px rgba(13, 62, 92, 0.06);
-  --shadow-md: 0 10px 28px rgba(13, 62, 92, 0.08);
-  --shadow-lg: 0 20px 44px rgba(13, 62, 92, 0.12);
+  --accent-secondary-glow: rgba(2, 132, 199, 0.3);
+  --accent-secondary-border-trans: rgba(2, 132, 199, 0.24);
+  --accent-secondary-bg-trans: rgba(2, 132, 199, 0.06);
 
-  --indigo-replace: #0d3e5c;
-  --indigo-tint-1: rgba(13, 62, 92, 0.04);
-  --indigo-tint-2: rgba(13, 62, 92, 0.08);
-  --indigo-tint-3: rgba(13, 62, 92, 0.14);
-  --indigo-tint-4: rgba(13, 62, 92, 0.22);
-  --indigo-tint-5: rgba(13, 62, 92, 0.36);
+  --shadow-sm: 0 4px 12px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 16px 32px rgba(15, 23, 42, 0.08);
 
-  /* JSON Syntax Colors - Light Mode (unchanged, already verified) */
+  --indigo-replace: #1e3a8a;
+  --indigo-tint-1: rgba(30, 58, 138, 0.04);
+  --indigo-tint-2: rgba(30, 58, 138, 0.08);
+  --indigo-tint-3: rgba(30, 58, 138, 0.14);
+  --indigo-tint-4: rgba(30, 58, 138, 0.22);
+  --indigo-tint-5: rgba(30, 58, 138, 0.36);
+
+  /* JSON Syntax Colors - Light Mode */
   --json-key: #7c3aed;
   --json-string: #047857;
   --json-number: #1d4ed8;
@@ -108,64 +104,42 @@
   --json-null: #64748b;
 }
 
-/* === Security / Forest Theme (NEW) ===
-   A green-on-black "security operations center" palette built for
-   researchers inspecting JWS / JWE payloads, JSON parsing errors,
-   and EMVCo rule violations. The look is inspired by classic
-   terminal aesthetics (Matrix, Nord Aurora) but with modern emerald
-   saturation so the UI stays usable for hours.
-
-   Token rationale:
-     - Base: #06120a is a near-black with a 5% green tint so the
-       surface doesn't feel like dead CRT space.
-     - Cards: #0a1a0e lifts the surface ~6% so layering is
-       perceivable without competing with the main content.
-     - Borders: rgba(110, 231, 130, 0.18) is faint enough to not
-       pull focus, but visible at 3:1 against the base.
-     - Text primary: #d9f5d9 is a desaturated near-white with a
-       subtle green cast. ~14.5:1 contrast on the base — past AAA.
-     - Text secondary: #7dd87d is a readable mid-green for body
-       copy, ~8.5:1 on the base.
-     - Text muted: #4a8a4a stays above 4.5:1 — usable for labels
-       and metadata.
-     - Accent secondary: #00ff41 is the "Matrix" hero color reserved
-       for active states (focus rings, current step, success Y/A/S).
-       Accent primary: #22c55e is the more readable emerald used
-       for text and labels, ~6:1 on the base. */
+/* === Security / Forest Theme === */
 .security-theme {
-  --accent-primary: #22c55e;
+  --accent-primary: #10b981;
   --accent-secondary: #00ff41;
   --accent-muted: #4a8a4a;
-  --bg-primary: #06120a;
-  --bg-secondary: #0a1a0e;
-  --bg-tertiary: #0e2214;
-  --bg-glass: rgba(10, 26, 14, 0.88);
-  --border-color: rgba(110, 231, 130, 0.18);
-  --border-active: rgba(0, 255, 65, 0.40);
+  --bg-primary: #040a06;
+  --bg-secondary: #09160e;
+  --bg-tertiary: #102618;
+  --bg-glass: rgba(9, 22, 14, 0.88);
+  --border-color: rgba(0, 255, 65, 0.16);
+  --border-active: rgba(0, 255, 65, 0.45);
   --text-primary: #d9f5d9;
   --text-secondary: #7dd87d;
   --text-muted: #4a8a4a;
 
-  --shadow-sm: 0 6px 18px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 12px 28px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 18px 40px rgba(0, 0, 0, 0.6);
+  --accent-secondary-glow: rgba(0, 255, 65, 0.45);
+  --accent-secondary-border-trans: rgba(0, 255, 65, 0.35);
+  --accent-secondary-bg-trans: rgba(0, 255, 65, 0.08);
 
-  --indigo-replace: #22c55e;
-  --indigo-tint-1: rgba(34, 197, 94, 0.06);
-  --indigo-tint-2: rgba(34, 197, 94, 0.12);
-  --indigo-tint-3: rgba(34, 197, 94, 0.20);
-  --indigo-tint-4: rgba(34, 197, 94, 0.32);
-  --indigo-tint-5: rgba(34, 197, 94, 0.48);
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 10px 24px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.7);
 
-  /* JSON Syntax Colors - Security / SOC palette. Cyan is intentional
-     for info/numbers to add a "screen phosphor" feel without losing
-     readability on the dark base. */
-  --json-key: #b8f5b8;     /* Soft mint — keys stay low-chroma so
-                               values + punctuation read first */
-  --json-string: #00ff41;  /* Matrix green for string content */
-  --json-number: #67e8f9;  /* Cool cyan — differentiates from strings */
-  --json-boolean: #fbbf24; /* Amber — classic terminal warning color */
-  --json-null: #6b7280;    /* Muted gray for null tokens */
+  --indigo-replace: #10b981;
+  --indigo-tint-1: rgba(16, 185, 129, 0.06);
+  --indigo-tint-2: rgba(16, 185, 129, 0.12);
+  --indigo-tint-3: rgba(16, 185, 129, 0.20);
+  --indigo-tint-4: rgba(16, 185, 129, 0.32);
+  --indigo-tint-5: rgba(16, 185, 129, 0.48);
+
+  /* JSON Syntax Colors - Security / SOC palette */
+  --json-key: #b8f5b8;
+  --json-string: #00ff41;
+  --json-number: #67e8f9;
+  --json-boolean: #fbbf24;
+  --json-null: #6b7280;
 }
 
 body {
@@ -173,7 +147,9 @@ body {
   padding: 0;
   min-height: 100vh;
   overflow: hidden;
-  background: var(--bg-primary);
+  background:
+    radial-gradient(circle at top left, var(--accent-secondary-bg-trans), transparent 25%),
+    var(--bg-primary);
   color: var(--text-primary);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
@@ -511,9 +487,16 @@ body.security-theme .path-pill-info    { color: #67e8f9; border-color: rgba(103,
 body.security-theme .path-pill-accent  { color: #86efac; border-color: rgba(134, 239, 172, 0.45); background: rgba(134, 239, 172, 0.10); }
 body.security-theme .path-pill-neutral { color: #7dd87d; background: rgba(110, 231, 130, 0.06); border-color: rgba(110, 231, 130, 0.22); }
 
+.status-btn {
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
 .status-btn:hover:not(.selected) {
   border-color: var(--border-active);
   color: var(--text-primary);
+  transform: translateY(-1.5px);
+  box-shadow: var(--shadow-sm);
+  background: var(--bg-secondary);
 }
 
 .status-caption {
@@ -1325,14 +1308,28 @@ button.legend-group-item.is-hidden .legend-group-eye {
 
 /* Protocol Data tab styling */
 .payload-pane {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: #080d16 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   transition: all 0.3s ease;
+
+  /* Force dark-theme syntax colors and layout variables inside the code panel for all themes */
+  --json-key: #c084fc;
+  --json-string: #34d399;
+  --json-number: #60a5fa;
+  --json-boolean: #fb923c;
+  --json-null: #a1a1aa;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --bg-primary: #080d16;
+  --bg-secondary: #0e1524;
+  --bg-tertiary: #161e2e;
 }
 
 .payload-toolbar {

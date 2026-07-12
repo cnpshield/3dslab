@@ -286,12 +286,11 @@ export const DomainGroupNode: React.FC<{
       style={{
         width: `${data.width}px`,
         height: `${data.height}px`,
-        border: '1px solid var(--border-color)',
-        background: 'var(--bg-primary)',
+        border: '1px solid rgba(148, 163, 184, 0.08)',
+        background: 'transparent',
         borderRadius: '8px',
         pointerEvents: 'none',
         position: 'relative',
-        opacity: 0.85,
       }}
       data-layer="background"
       data-domain="group"
@@ -389,20 +388,17 @@ export const StepGroupBandNode: React.FC<{
       style={{
         width: `${data.width}px`,
         height: `${data.height}px`,
-        background: `linear-gradient(90deg, ${data.color}${data.isCurrent ? '1c' : '0e'} 0%, ${data.color}${data.isCurrent ? '28' : '14'} 50%, ${data.color}${data.isCurrent ? '1c' : '0e'} 100%)`,
-        backgroundImage: `radial-gradient(${data.color}20 1px, transparent 1px), linear-gradient(90deg, ${data.color}${data.isCurrent ? '1c' : '0e'} 0%, ${data.color}${data.isCurrent ? '28' : '14'} 50%, ${data.color}${data.isCurrent ? '1c' : '0e'} 100%)`,
-        backgroundSize: '14px 14px, 100% 100%',
-        backgroundPosition: '0 0, 0 0',
+        background: `linear-gradient(90deg, ${data.color}${data.isCurrent ? '10' : '04'} 0%, ${data.color}${data.isCurrent ? '18' : '08'} 50%, ${data.color}${data.isCurrent ? '10' : '04'} 100%)`,
         borderLeft: `3px solid ${data.color}`,
         borderRight: `3px solid ${data.color}`,
-        borderTop: `1px solid ${data.color}${data.isCurrent ? '80' : '40'}`,
-        borderBottom: `1px solid ${data.color}${data.isCurrent ? '80' : '40'}`,
-        borderRadius: '6px',
+        borderTop: `1px solid ${data.color}${data.isCurrent ? '50' : '20'}`,
+        borderBottom: `1px solid ${data.color}${data.isCurrent ? '50' : '20'}`,
+        borderRadius: '8px',
         pointerEvents: 'none',
         position: 'relative',
-        opacity: data.isCurrent ? 1 : 0.7,
+        opacity: data.isCurrent ? 1 : 0.45,
         boxShadow: data.isCurrent
-          ? `inset 0 0 0 1px ${data.color}30, 0 0 24px -10px ${data.color}80`
+          ? `0 0 16px -4px ${data.color}40`
           : 'none',
         transition: 'opacity 0.3s ease, box-shadow 0.3s ease',
       }}
@@ -697,12 +693,6 @@ export const SwimlaneColumnNode: React.FC<{
     fullName: string;
   };
 }> = React.memo(({ data }) => {
-  // The current-step highlight: subtle when not active, bright tinted band
-  // with a soft outer glow when active so the user can pick out the talking
-  // pair at a glance.
-  const activeGradient = `linear-gradient(180deg, ${data.stroke}22 0%, ${data.stroke}10 45%, ${data.stroke}04 100%)`;
-  const inactiveGradient = `linear-gradient(180deg, ${data.stroke}06 0%, ${data.stroke}02 100%)`;
-
   return (
     <div
       className={`swimlane-column-node ${data.isActive ? 'is-active' : ''}`}
@@ -712,15 +702,9 @@ export const SwimlaneColumnNode: React.FC<{
       style={{
         width: `${data.width}px`,
         height: `${data.height}px`,
-        background: data.isActive ? activeGradient : inactiveGradient,
-        borderLeft: `1px dashed ${data.stroke}${data.isActive ? '55' : '22'}`,
-        borderRight: `1px dashed ${data.stroke}${data.isActive ? '55' : '22'}`,
+        background: data.isActive ? `linear-gradient(180deg, ${data.stroke}12 0%, ${data.stroke}03 50%, transparent 100%)` : 'transparent',
         pointerEvents: 'none',
-        transition:
-          'background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease',
-        boxShadow: data.isActive
-          ? `inset 0 0 0 1px ${data.stroke}18, 0 0 24px -8px ${data.stroke}40`
-          : 'none',
+        transition: 'background 0.25s ease',
         position: 'relative',
       }}
     >
@@ -747,14 +731,14 @@ export const SwimlaneColumnNode: React.FC<{
           textTransform: 'uppercase',
           borderRadius: '6px',
           background: data.isActive ? data.stroke : 'var(--bg-secondary)',
-          color: data.isActive ? '#08141d' : data.stroke,
-          border: `1px solid ${data.stroke}${data.isActive ? '' : '55'}`,
+          color: data.isActive ? '#080d16' : data.stroke,
+          border: `1px solid ${data.stroke}${data.isActive ? '' : '35'}`,
           whiteSpace: 'nowrap',
           boxShadow: data.isActive
-            ? `0 4px 10px -2px ${data.stroke}55`
-            : '0 2px 4px rgba(0,0,0,0.18)',
+            ? `0 4px 10px -2px ${data.stroke}44`
+            : 'none',
           transition: 'all 0.2s ease',
-          opacity: data.isActive ? 1 : 0.7,
+          opacity: data.isActive ? 1 : 0.6,
         }}
       >
         <span
@@ -762,7 +746,7 @@ export const SwimlaneColumnNode: React.FC<{
             width: '5px',
             height: '5px',
             borderRadius: '50%',
-            background: data.isActive ? '#08141d' : data.stroke,
+            background: data.isActive ? '#080d16' : data.stroke,
             boxShadow: data.isActive ? 'none' : `0 0 4px ${data.stroke}`,
           }}
         />

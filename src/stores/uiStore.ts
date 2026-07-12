@@ -51,7 +51,7 @@ const initial: UIState = {
   isScenarioToolbarCollapsed: false,
   securityLensEnabled: false,
   shareCopied: false,
-  detailsContext: { kind: 'glossary' },
+  detailsContext: { kind: 'step', stepId: 'step_0A' },
   hasLoadedSharedState: false,
   showListView: false,
 };

@@ -34,7 +34,7 @@ const ROOT = resolve(__dirname, '..');
 const DIST = resolve(ROOT, 'dist');
 const PAYLOADS_DIR = join(ROOT, 'src', 'data', 'payloads');
 
-const CANONICAL_ORIGIN = 'https://emv-3ds-lab.github.io';
+const CANONICAL_ORIGIN = 'https://cnpshield.github.io/3dslab';
 const SITE_NAME = 'EMV 3DS Protocol Lab';
 const OG_IMAGE = `${CANONICAL_ORIGIN}/og-image.png`;
 
@@ -465,21 +465,21 @@ function renderCite() {
   author       = {Wasif Faisal},
   title        = {{EMV 3-D Secure Protocol Lab -- research artifact}},
   year         = {2026},
-  howpublished = {\\url{https://emv-3ds-lab.github.io}},
+  howpublished = {\\url{https://cnpshield.github.io/3dslab}},
   note         = {Apache-2.0; field-level payload registry anchored to EMV 3DS v2.3.1 Core Spec Tables B.1--B.11.}
 }</code></pre>
     </section>
     <section class="lp-section">
       <h2>APA</h2>
-      <p class="lp-cite-block">Wasif, F. (2026). EMV 3-D Secure Protocol Lab (Version 0.3.0) [Software]. https://emv-3ds-lab.github.io. Apache-2.0.</p>
+      <p class="lp-cite-block">Wasif, F. (2026). EMV 3-D Secure Protocol Lab (Version 0.3.0) [Software]. https://cnpshield.github.io/3dslab. Apache-2.0.</p>
     </section>
     <section class="lp-section">
       <h2>IEEE</h2>
-      <p class="lp-cite-block">[1] F. Wasif, "EMV 3-D Secure Protocol Lab — research artifact," 2026. [Online]. Available: https://emv-3ds-lab.github.io.</p>
+      <p class="lp-cite-block">[1] F. Wasif, "EMV 3-D Secure Protocol Lab — research artifact," 2026. [Online]. Available: https://cnpshield.github.io/3dslab.</p>
     </section>
     <section class="lp-section">
       <h2>MLA</h2>
-      <p class="lp-cite-block">Wasif, Faisal. EMV 3-D Secure Protocol Lab — research artifact. 2026, emv-3ds-lab.github.io.</p>
+      <p class="lp-cite-block">Wasif, Faisal. EMV 3-D Secure Protocol Lab — research artifact. 2026, cnpshield.github.io/3dslab.</p>
     </section>
     <section class="lp-section">
       <h2>See also</h2>

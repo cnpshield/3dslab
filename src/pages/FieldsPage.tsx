@@ -53,8 +53,8 @@ export function FieldsPage() {
     name: 'EMV 3DS Field Reference',
     description: 'Field-level reference for EMV 3-D Secure messages, indexed by message type and protocol version.',
     inLanguage: 'en',
-    author: { '@id': 'https://emv-3ds-lab.github.io/#author' },
-    publisher: { '@id': 'https://emv-3ds-lab.github.io/#website' },
+    author: { '@id': 'https://cnpshield.github.io/3dslab/#author' },
+    publisher: { '@id': 'https://cnpshield.github.io/3dslab/#website' },
     hasDefinedTerm: grouped.flatMap((g) =>
       g.fields.map((f) => ({
         '@type': 'Property',
