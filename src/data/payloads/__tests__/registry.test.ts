@@ -25,6 +25,7 @@ import { listFieldsFor, PAYLOAD_VERSION_ORDER } from '../types';
 
 const baseScenario: Scenario = {
   protocolVersion: '2.3.1',
+  deviceChannel: 'browser',
   methodPath: 'reused',
   dsRouting: 'normal',
   transStatus: 'Y',
@@ -209,6 +210,13 @@ describe('ARes wire shape', () => {
     const spc = getPayload('ARes', { ...baseScenario, protocolVersion: '2.1.0', transStatus: 'S' });
     expect(spc.transStatus).toBe('C');
   });
+
+  it('emits status-appropriate reason codes for negative ARes outcomes', () => {
+    expect(getPayload('ARes', { ...baseScenario, transStatus: 'N' }).transStatusReason).toBe('01');
+    expect(getPayload('ARes', { ...baseScenario, transStatus: 'U' }).transStatusReason).toBe('22');
+    expect(getPayload('ARes', { ...baseScenario, transStatus: 'R' }).transStatusReason).toBe('11');
+    expect(getPayload('ARes', { ...baseScenario, transStatus: 'Y' }).transStatusReason).toBe('');
+  });
 });
 
 describe('RReq wire shape', () => {
@@ -233,6 +241,37 @@ describe('RReq wire shape', () => {
     const payload = getPayload('RReq', { ...baseScenario, protocolVersion: '2.1.0' });
     expect(payload).toHaveProperty('acsRenderingType');
   });
+
+  it('maps challenge-success RReq to a final Y status', () => {
+    const payload = getPayload('RReq', { ...baseScenario, transStatus: 'C', challengeOutcome: 'success' });
+    expect(payload.transStatus).toBe('Y');
+    expect(payload.transStatusReason).toBe('');
+  });
+
+  it('maps challenge-failure RReq to N with reason 19', () => {
+    const payload = getPayload('RReq', { ...baseScenario, transStatus: 'C', challengeOutcome: 'failure' });
+    expect(payload.transStatus).toBe('N');
+    expect(payload.transStatusReason).toBe('19');
+  });
+
+  it('maps cancelled challenge RReq to N with cancellation metadata', () => {
+    const payload = getPayload('RReq', { ...baseScenario, transStatus: 'C', challengeOutcome: 'cancelled' });
+    expect(payload.transStatus).toBe('N');
+    expect(payload.transStatusReason).toBe('26');
+    expect(payload.challengeCancelationIndicator).toBe('01');
+  });
+
+  it('maps decoupled fallback RReq to D with reason 29', () => {
+    const payload = getPayload('RReq', { ...baseScenario, transStatus: 'C', challengeOutcome: 'decoupled' });
+    expect(payload.transStatus).toBe('D');
+    expect(payload.transStatusReason).toBe('29');
+  });
+
+  it('preserves opt-out RReq as C so the branch is not misreported as failure', () => {
+    const payload = getPayload('RReq', { ...baseScenario, transStatus: 'C', challengeOutcome: 'optout' });
+    expect(payload.transStatus).toBe('C');
+    expect(payload.transStatusReason).toBe('');
+  });
 });
 
 describe('RRes / Erro / OReq / ORes', () => {
@@ -240,6 +279,26 @@ describe('RRes / Erro / OReq / ORes', () => {
     const v210 = getPayload('RRes', { ...baseScenario, protocolVersion: '2.1.0' });
     const v231 = getPayload('RRes', { ...baseScenario, protocolVersion: '2.3.1' });
     expect(Object.keys(v210).sort()).toEqual(Object.keys(v231).sort());
+    expect(Object.keys(v231).sort()).toEqual([
+      'acsTransID',
+      'dsTransID',
+      'messageExtension',
+      'messageType',
+      'messageVersion',
+      'resultsStatus',
+      'sdkTransID',
+      'threeDSServerTransID',
+    ]);
+  });
+
+  it('maps RRes resultsStatus to opt-out and decoupled branches', () => {
+    const optOut = getPayload('RRes', { ...baseScenario, transStatus: 'C', challengeOutcome: 'optout' });
+    const decoupled = getPayload('RRes', { ...baseScenario, transStatus: 'C', challengeOutcome: 'decoupled' });
+    const normal = getPayload('RRes', { ...baseScenario, transStatus: 'C', challengeOutcome: 'success' });
+
+    expect(optOut.resultsStatus).toBe('02');
+    expect(decoupled.resultsStatus).toBe('04');
+    expect(normal.resultsStatus).toBe('01');
   });
 
   it('Erro keeps sdkTransID across v2.1.0 / v2.2.0 / v2.3.1', () => {
@@ -255,8 +314,32 @@ describe('RRes / Erro / OReq / ORes', () => {
     const oReq = getPayload('OReq', { ...baseScenario, protocolVersion: '2.3.1' });
     expect(oReq.messageType).toBe('OReq');
     expect(oReq.messageVersion).toBe('2.3.1');
+    expect(Object.keys(oReq).sort()).toEqual([
+      'dsReferenceNumber',
+      'dsTransID',
+      'messageExtension',
+      'messageType',
+      'messageVersion',
+      'opCategory',
+      'opDescription',
+      'opExpDate',
+      'opPriorTransRef',
+      'opSeq',
+      'opSeverity',
+    ]);
     const oRes = getPayload('ORes', { ...baseScenario, protocolVersion: '2.3.1' });
     expect(oRes.messageType).toBe('ORes');
+    expect(Object.keys(oRes).sort()).toEqual([
+      'acsReferenceNumber',
+      'acsTransID',
+      'dsTransID',
+      'messageExtension',
+      'messageType',
+      'messageVersion',
+      'opStatus',
+      'threeDSServerRefNumber',
+      'threeDSServerTransID',
+    ]);
   });
 });
 
@@ -281,6 +364,23 @@ describe('scenario overlay', () => {
     const payload = getDynamicPayload(step, { ...baseScenario, transStatus: 'N' });
     expect(payload).not.toBeNull();
     expect(payload!.transStatus).toBe('N');
+  });
+
+  it('getDynamicPayload overlays RRes resultsStatus for opt-out', async () => {
+    const { getDynamicPayload } = await import('../../../utils/protocolViz');
+    const step = {
+      id: 'step_18',
+      num: '18',
+      label: 'test',
+      detail: 'test',
+      source: null,
+      target: null,
+      isActive: () => true,
+      messageType: 'RRes' as const,
+    };
+    const payload = getDynamicPayload(step, { ...baseScenario, transStatus: 'C', challengeOutcome: 'optout' });
+    expect(payload).not.toBeNull();
+    expect(payload!.resultsStatus).toBe('02');
   });
 });
 

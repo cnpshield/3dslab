@@ -8,6 +8,7 @@ export type ErrorPath = 'none' | 'cres_invalid' | 'acs_error' | 'browser_timeout
 export type ChallengePreference = '01' | '02' | '03' | '04';
 export type ChallengeMandated = 'Y' | 'N';
 export type ChallengePresentation = 'html' | 'oob';
+export type DeviceChannel = 'browser' | 'app';
 
 /**
  * The eight canonical 3DS message types modelled in the lab. Declared
@@ -74,6 +75,7 @@ export type StepState =
 
 export interface Scenario {
   protocolVersion: ProtocolVersion;
+  deviceChannel: DeviceChannel;
   methodPath: MethodPath;
   dsRouting: DSRouting;
   transStatus: TransStatus;

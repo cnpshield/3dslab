@@ -46,38 +46,67 @@ export const ParticipantHeaderNode: React.FC<{ data: { name: string; fullName: s
       aria-label={`${data.name} (${data.fullName})${data.isActive ? ' — active in current step' : ''}`}
       title={`Click to view ${data.fullName} profile`}
       style={{
-        border: `1px solid ${data.isActive ? data.stroke : 'var(--border-color)'}`,
-        borderTop: `3px solid ${data.stroke}`,
+        border: `1.5px solid ${data.isActive ? data.stroke : 'var(--border-color)'}`,
+        borderTop: `4px solid ${data.stroke}`,
         boxShadow: data.isActive
-          ? `0 0 14px ${data.stroke}55, var(--shadow-sm)`
-          : 'var(--shadow-sm)',
-        borderRadius: '8px',
-        padding: '12px 16px',
-        background: 'var(--bg-secondary)',
+          ? `0 0 20px ${data.stroke}66, 0 8px 24px rgba(0, 0, 0, 0.4)`
+          : '0 4px 16px rgba(0, 0, 0, 0.25)',
+        borderRadius: '10px',
+        padding: '12px 14px',
+        background: data.isActive ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
         color: 'var(--text-primary)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        width: '160px',
+        width: '170px',
         textAlign: 'center',
-        transition: 'all 0.2s ease',
+        transition: 'all 0.25s ease',
         cursor: 'pointer',
       }}
     >
       <div
         style={{
-          background: 'var(--bg-tertiary)',
-          padding: '6px',
-          borderRadius: '6px',
-          marginBottom: '6px',
-          border: '1px solid var(--border-color)',
+          background: `${data.stroke}18`,
+          padding: '8px',
+          borderRadius: '8px',
+          marginBottom: '8px',
+          border: `1px solid ${data.stroke}35`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
         {getParticipantIcon(data.id, data.stroke)}
       </div>
-      <div style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>{data.name}</div>
-      <div style={{ fontSize: '9.5px', color: 'var(--text-muted)', marginTop: '2px', fontWeight: '500' }}>{data.fullName}</div>
+      <div style={{ fontWeight: '800', fontSize: '13.5px', color: 'var(--text-primary)', letterSpacing: '0.01em' }}>
+        {data.name}
+      </div>
+      <div style={{
+        fontSize: '10px',
+        color: 'var(--text-muted)',
+        marginTop: '3px',
+        fontWeight: '600',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        maxWidth: '150px'
+      }}>
+        {data.fullName}
+      </div>
+      <div style={{
+        marginTop: '6px',
+        fontSize: '9px',
+        fontWeight: '800',
+        color: data.stroke,
+        background: `${data.stroke}14`,
+        padding: '1px 6px',
+        borderRadius: '4px',
+        letterSpacing: '0.04em',
+        border: `1px solid ${data.stroke}30`
+      }}>
+        {data.id}
+      </div>
 
       {/* Handle for the lifeline edge stretching downwards */}
       <Handle type="source" position={Position.Bottom} id="lifeline-start" style={{ opacity: 0 }} />
@@ -203,7 +232,7 @@ export const InternalStepNode: React.FC<{
   const isError = !!data.isError;
   const borderStyle = isError
     ? `1.5px dashed ${data.stroke}`
-    : `${isHighlighted ? 2.25 : 1.5}px solid ${isHighlighted ? data.stroke : data.isActive ? 'var(--border-active)' : 'var(--border-color)'}`;
+    : `${isHighlighted ? 2 : 1}px solid ${isHighlighted ? data.stroke : data.isActive ? 'var(--border-active)' : 'var(--border-color)'}`;
 
   return (
     <div
@@ -212,58 +241,83 @@ export const InternalStepNode: React.FC<{
       data-step-state={isError ? 'error' : isHighlighted ? 'current' : data.isActive ? 'active' : 'inactive'}
       data-layer="step"
       data-archetype={data.archetype ?? 'internal'}
-      // role="button" + tabIndex makes this node focusable by keyboard
-      // navigation (Tab key). The aria-current="step" attribute exposes
-      // the active step to screen readers in the same way the
-      // <StepNumberRailNode> does, so the two are equivalent anchors.
       role="button"
       tabIndex={isHighlighted ? 0 : -1}
       aria-current={isHighlighted ? 'step' : undefined}
       aria-invalid={isError || undefined}
       aria-label={`Step ${data.num}: ${data.label}${isError ? ' (error path)' : ''}`}
       style={{
-        padding: '8px 12px',
-        borderRadius: '6px',
-        background: 'var(--bg-secondary)',
+        padding: '10px 14px',
+        borderRadius: '8px',
+        background: isHighlighted ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
         border: borderStyle,
+        borderLeft: `4px solid ${data.stroke}`,
         boxShadow: isHighlighted
-          ? `0 4px 12px -2px rgba(0, 0, 0, 0.12), 0 0 0 1px ${data.stroke}20`
-          : 'var(--shadow-sm)',
+          ? `0 0 20px ${data.stroke}44, 0 8px 24px rgba(0, 0, 0, 0.4)`
+          : '0 2px 8px rgba(0, 0, 0, 0.2)',
         color: data.isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-        fontSize: '11px',
-        width: '180px',
+        fontSize: '11.5px',
+        width: '210px',
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
-        transition: 'all 0.2s ease',
-        opacity: data.isActive ? 1 : 0.25,
+        gap: '10px',
+        transition: 'all 0.25s ease',
+        opacity: data.isActive ? 1 : 0.65,
         cursor: 'pointer',
       }}
     >
       <div
         style={{
-          background: 'var(--bg-tertiary)',
-          padding: '4px',
-          borderRadius: '4px',
+          background: `${data.stroke}18`,
+          padding: '6px',
+          borderRadius: '6px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          border: '1px solid var(--border-color)'
+          border: `1px solid ${data.stroke}35`,
+          flexShrink: 0,
         }}
       >
         {getInternalIcon(data.label)}
       </div>
       <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden' }}>
-        <div style={{ fontWeight: '700', color: data.isActive ? data.stroke : 'var(--text-muted)', fontSize: '10px' }}>
-          STEP {data.num}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}>
+          <span style={{
+            fontWeight: '800',
+            color: data.stroke,
+            fontSize: '9.5px',
+            background: `${data.stroke}15`,
+            padding: '1px 5px',
+            borderRadius: '4px',
+            letterSpacing: '0.04em'
+          }}>
+            STEP {data.num}
+          </span>
+          {isHighlighted && (
+            <span style={{
+              fontSize: '8.5px',
+              fontWeight: '700',
+              color: 'var(--accent-secondary)',
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase'
+            }}>
+              Active
+            </span>
+          )}
         </div>
         <div style={{
-          fontWeight: '500',
-          color: data.isActive ? 'var(--text-primary)' : 'var(--text-muted)',
+          fontWeight: '600',
+          color: data.isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          marginTop: '1px'
+          marginTop: '3px',
+          fontSize: '11.5px',
+          lineHeight: 1.35
         }}>
           {data.label}
         </div>

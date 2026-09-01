@@ -48,11 +48,6 @@ function esc(s) {
     .replace(/'/g, '&#39;');
 }
 
-/** Read a JSON file from the registry. */
-function readJson(path) {
-  return JSON.parse(readFileSync(path, 'utf8'));
-}
-
 /** Load every payload entry in the versioned payload registry. */
 function loadPayloads() {
   const out = {};
@@ -201,11 +196,18 @@ function shell({ eyebrow, h1, lede }, mainBody) {
     </header>
     ${mainBody}
     <footer class="lp-foot">
-      <p>Built by Wasif Faisal, BRAC University. Open data, open research. Apache-2.0.</p>
+      <p>Conceived, Researched & Architected by <a href="https://www.linkedin.com/in/cswasif/" target="_blank" rel="noreferrer">Wasif Faisal</a> (BRAC University) · Open research & artifacts · Apache-2.0.</p>
     </footer>
   </main>
-  <footer class="lp-foot lp-site-foot" role="contentinfo">
-    <p>Built by Wasif Faisal, BRAC University. Open data, open research. Apache-2.0.</p>
+  <footer class="lp-site-footer" role="contentinfo">
+    <div class="lp-site-footer-inner">
+      <p style="margin:0;line-height:1.5;">Conceived, Researched & Architected by <a href="https://www.linkedin.com/in/cswasif/" target="_blank" rel="noreferrer">Wasif Faisal</a> (BRAC University) · Open research & artifacts · Apache-2.0.</p>
+      <div class="lp-site-footer-links">
+        <a href="https://github.com/cnpshield/3dslab" target="_blank" rel="noreferrer">GitHub</a>
+        <a href="https://www.linkedin.com/in/cswasif/" target="_blank" rel="noreferrer">LinkedIn</a>
+        <a href="mailto:md.wasif.faisal@g.bracu.ac.bd">Contact</a>
+      </div>
+    </div>
   </footer>
 </div>
 `;
@@ -213,7 +215,6 @@ function shell({ eyebrow, h1, lede }, mainBody) {
 
 function renderVersions(payloads) {
   const messageTypes = ['AReq', 'ARes', 'CReq', 'CRes', 'RReq', 'RRes', 'Erro', 'OReq', 'ORes'];
-  const versions = ['2.1.0', '2.2.0', '2.3.1'];
   const rows = messageTypes
     .map((mt) => {
       const slot = payloads[mt] || {};
@@ -279,7 +280,6 @@ function renderVersions(payloads) {
 }
 
 function renderFields(payloads) {
-  const versions = ['2.1.0', '2.2.0', '2.3.1'];
   const version = '2.3.1';
   const messageTypes = ['AReq', 'ARes', 'CReq', 'CRes', 'RReq', 'RRes', 'Erro', 'OReq', 'ORes', 'PReq', 'PRes'];
   const groups = messageTypes

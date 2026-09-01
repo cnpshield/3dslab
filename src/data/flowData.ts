@@ -1,4 +1,4 @@
-import type { Participant, FlowStep, StepGroupMeta, DomainOverview, ParticipantOverview, StepGroupOverview, GlossaryEntry, SecurityLensNote } from '../types';
+import type { Participant, FlowStep, StepGroupMeta, DomainOverview, ParticipantOverview, StepGroupOverview, GlossaryEntry, SecurityLensNote, Scenario, DeviceChannel } from '../types';
 
 export const PARTICIPANTS: Participant[] = [
   {
@@ -51,6 +51,78 @@ export const PARTICIPANTS: Participant[] = [
   },
 ];
 
+const isAppChannel = (scenarioOrChannel: Scenario | DeviceChannel) =>
+  (typeof scenarioOrChannel === 'string' ? scenarioOrChannel : scenarioOrChannel.deviceChannel) === 'app';
+
+export function getParticipantsForScenario(scenarioOrChannel: Scenario | DeviceChannel): Participant[] {
+  if (!isAppChannel(scenarioOrChannel)) return PARTICIPANTS;
+
+  return PARTICIPANTS.map((participant) =>
+    participant.id === 'BR'
+      ? {
+          ...participant,
+          name: '3DS SDK',
+          fullName: '3DS SDK / Challenge Runtime',
+        }
+      : participant.id === 'RE'
+        ? {
+            ...participant,
+            fullName: '3DS Requestor (Merchant App)',
+          }
+        : participant
+  );
+}
+
+export function getParticipantOverviewsForScenario(scenarioOrChannel: Scenario | DeviceChannel): ParticipantOverview[] {
+  if (!isAppChannel(scenarioOrChannel)) return PARTICIPANT_OVERVIEWS;
+
+  return PARTICIPANT_OVERVIEWS.map((participant) => {
+    if (participant.id === 'BR') {
+      return {
+        ...participant,
+        shortName: '3DS SDK',
+        fullName: '3DS SDK / Challenge Runtime',
+        specSection: 'App-based challenge; Table B.1 SDK fields',
+        role: 'The on-device 3DS SDK and challenge runtime inside the requestor app. It binds the app-side transaction identifiers, maintains the protected SDK challenge channel to the ACS, renders issuer-directed challenge UI, and hands the final result back to the requestor app.',
+        owns: [
+          'The local `sdkTransID` binding for the active app-session challenge',
+          'SDK challenge rendering state (`acsRenderingType`, interaction lifecycle, close/dismiss behavior)',
+        ],
+        doesNotOwn: [
+          'The issuer decision or the final authentication result (the ACS still decides that)',
+          'Merchant checkout policy after the SDK returns control to the requestor app',
+        ],
+        sends: ['Initial SDK CReq to ACS (step 11d)', 'Follow-up SDK challenge messages / responses (step 14)', 'Validated completion callback to requestor app (step 21e)'],
+        receives: ['Challenge-start parameters from the requestor app (step 11c)', 'ACS CRes-driven challenge UI state (step 12c)', 'Final ACS CRes over the SDK channel (step 21d)'],
+        authoritativeIds: ['sdkTransID (per app-channel transaction)'],
+        notes: [
+          'This lane is not a browser surrogate. In app challenge, the SDK owns the client-side ACS transport and rendering lifecycle.',
+          'The SDK still does not make authentication decisions; it is a constrained runtime that carries ACS-directed state back to the requestor app.',
+        ],
+      };
+    }
+
+    if (participant.id === 'RE') {
+      return {
+        ...participant,
+        fullName: '3DS Requestor (Merchant App)',
+        role: 'The merchant requestor logic surrounding the app checkout. It collects requestor data, invokes the 3DS SDK for app challenge, validates the returned completion data, and decides how checkout resumes after 3DS.',
+        owns: [
+          'The requestor app checkout UI and merchant-side state',
+          'The 3DS Requestor Authentication Info (3RI) when applicable',
+          'The 3DS Requestor identifiers such as `threeDSRequestorID`, `threeDSRequestorURL`, and app-deep-link context',
+        ],
+        notes: [
+          'In app scenarios, the requestor environment spans the merchant app plus whatever merchant service coordinates with the 3DS Server.',
+          'The requestor app invokes the SDK, but it still must validate the final completion data before treating challenge as successful.',
+        ],
+      };
+    }
+
+    return participant;
+  });
+}
+
 /**
  * Step group metadata used to render colored bands on the sequence diagram.
  * Each group represents a conceptual phase of the 3DS flow. The order
@@ -100,7 +172,7 @@ export const STEP_GROUPS: StepGroupMeta[] = [
   {
     id: 'acs_decision',
     title: 'Step 8 — ACS Risk Decision',
-    description: 'The ACS uses the AReq data, prior 3DS Method data, and risk signals to decide: authenticate without challenge (Y/A), challenge, decoupled auth, or reject. Frictionless ends here.',
+    description: 'The ACS uses the AReq data, prior 3DS Method data, and risk signals to decide whether to return an authenticated result (Y), an attempts result (A), challenge, decoupled authentication, or a negative outcome. Frictionless and attempts branches split here.',
     color: '#10b981', // emerald
     icon: 'shield',
     introducedIn: '2.1.0',
@@ -108,15 +180,15 @@ export const STEP_GROUPS: StepGroupMeta[] = [
   {
     id: 'ares',
     title: 'Step 9–10 — ARes Return',
-    description: 'The ARes is validated and forwarded back through the DS to the 3DS Server, which either finishes frictionless processing or starts the browser challenge path.',
+    description: 'The ARes is validated and forwarded back through the DS to the 3DS Server, which either finishes the direct ARes path or starts browser challenge handling for `transStatus = C`.',
     color: '#06b6d4', // cyan
     icon: 'response',
     introducedIn: '2.1.0',
   },
   {
     id: 'challenge',
-    title: 'Step 10–15 — Browser Challenge',
-    description: 'For `transStatus = C`, the 3DS Server posts a CReq through the browser, the ACS renders the challenge UI, and the cardholder submits the requested authentication data.',
+    title: 'Step 10–15 — Challenge',
+    description: 'For `transStatus = C`, the requestor starts challenge handling using the correct client channel: browser flows post a 3DS Server-built CReq through the browser, while app flows use the 3DS SDK / ACS channel with SDK-rendered UI and repeated CReq/CRes exchanges as needed.',
     color: '#ef4444', // red
     icon: 'challenge',
     introducedIn: '2.1.0',
@@ -124,7 +196,7 @@ export const STEP_GROUPS: StepGroupMeta[] = [
   {
     id: 'results',
     title: 'Step 16–21 — Results Exchange',
-    description: 'After challenge completion, the ACS sends the final result via RReq/RRes and then posts the final CRes to the merchant notification URL.',
+    description: 'After challenge completion, the ACS sends the authoritative result via RReq/RRes and then closes the client-facing challenge channel using the browser notification path or the SDK completion path.',
     color: '#14b8a6', // teal
     icon: 'result',
     introducedIn: '2.1.0',
@@ -132,7 +204,7 @@ export const STEP_GROUPS: StepGroupMeta[] = [
   {
     id: 'completion',
     title: 'Step 22 — Checkout Continuation',
-    description: '3DS processing ends. The 3DS Requestor Environment continues the checkout and, for success, includes the ECI and CAVV in the standard authorization message.',
+    description: '3DS processing ends. The 3DS Requestor Environment continues checkout and carries forward the issuer result correctly: authenticated outcomes use the ACS-provided authentication data, attempts uses its own ECI semantics, and non-authenticated paths stay outside liability-shift claims.',
     color: '#84cc16', // lime
     icon: 'check',
     introducedIn: '2.1.0',
@@ -375,7 +447,7 @@ export const FLOW_STEPS: FlowStep[] = [
       setBy: '3DS_Server'
     },
     payloadTitle: 'Reused 3DS Method',
-    isActive: (s) => s.methodPath === 'reused'
+    isActive: (s) => s.deviceChannel !== 'app' && s.methodPath === 'reused'
   },
 
   // SCENARIO B: Execute 3DS Method (§5.8.1.1 + §3.3 Steps 3–4)
@@ -403,7 +475,7 @@ export const FLOW_STEPS: FlowStep[] = [
       action: 'Inject hidden iframe into DOM'
     },
     payloadTitle: 'Hidden iframe DOM Injection',
-    isActive: (s) => s.methodPath === 'executed'
+    isActive: (s) => s.deviceChannel !== 'app' && s.methodPath === 'executed'
   },
   {
     id: 'step_4a',
@@ -430,7 +502,7 @@ export const FLOW_STEPS: FlowStep[] = [
       }
     },
     payloadTitle: 'HTTP POST — threeDSMethodData',
-    isActive: (s) => s.methodPath === 'executed'
+    isActive: (s) => s.deviceChannel !== 'app' && s.methodPath === 'executed'
   },
   {
     id: 'step_4b',
@@ -458,7 +530,7 @@ export const FLOW_STEPS: FlowStep[] = [
       }
     },
     payloadTitle: 'ACS Device Fingerprint Data',
-    isActive: (s) => s.methodPath === 'executed'
+    isActive: (s) => s.deviceChannel !== 'app' && s.methodPath === 'executed'
   },
   {
     id: 'step_4c',
@@ -484,7 +556,7 @@ export const FLOW_STEPS: FlowStep[] = [
       }
     },
     payloadTitle: 'ACS Completion POST',
-    isActive: (s) => s.methodPath === 'executed'
+    isActive: (s) => s.deviceChannel !== 'app' && s.methodPath === 'executed'
   },
   {
     id: 'step_4d',
@@ -507,7 +579,7 @@ export const FLOW_STEPS: FlowStep[] = [
       threeDSServerTransID: '8a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d'
     },
     payloadTitle: 'Browser Notification Event',
-    isActive: (s) => s.methodPath === 'executed'
+    isActive: (s) => s.deviceChannel !== 'app' && s.methodPath === 'executed'
   },
   {
     id: 'step_4e',
@@ -528,7 +600,7 @@ export const FLOW_STEPS: FlowStep[] = [
       threeDSCompInd: 'Y'
     },
     payloadTitle: 'Method Completion Report',
-    isActive: (s) => s.methodPath === 'executed'
+    isActive: (s) => s.deviceChannel !== 'app' && s.methodPath === 'executed'
   },
 
   // SCENARIO C: Method URL Unavailable
@@ -552,7 +624,7 @@ export const FLOW_STEPS: FlowStep[] = [
       reason: 'No threeDSMethodURL in cached PRes for this card range'
     },
     payloadTitle: 'Method Unavailable Notification',
-    isActive: (s) => s.methodPath === 'unavailable'
+    isActive: (s) => s.deviceChannel !== 'app' && s.methodPath === 'unavailable'
   },
 
   // SCENARIO D: Method Timeout
@@ -576,7 +648,7 @@ export const FLOW_STEPS: FlowStep[] = [
       reason: 'No completion notification within 5000ms'
     },
     payloadTitle: 'Method Timeout',
-    isActive: (s) => s.methodPath === 'timeout'
+    isActive: (s) => s.deviceChannel !== 'app' && s.methodPath === 'timeout'
   },
 
   // ──────────────────────────────────────────────────────────────
@@ -652,7 +724,7 @@ export const FLOW_STEPS: FlowStep[] = [
       action: 'Reuse existing 3DS Method result'
     },
     payloadTitle: '3DS Method Freshness Check',
-    isActive: () => true
+    isActive: (s) => s.deviceChannel !== 'app'
   },
 
   // ──────────────────────────────────────────────────────────────
@@ -663,7 +735,7 @@ export const FLOW_STEPS: FlowStep[] = [
     id: 'step_6a',
     num: '6a',
     label: 'Formats AReq Message',
-    detail: 'The 3DS Server obtains the 3DS Requestor ID, 3DS Server Reference Number, and Acquirer BIN. It determines the highest common protocol version from the cached PRes, establishes a secure link with the DS, and formats the AReq message with `deviceChannel = 02` (Browser) and `messageCategory = 01` (Payment Authentication). For researcher accuracy, the browser AReq also carries the challenge preference, merchant notification URL, browser telemetry, and conditionally optional data elements commonly used in risk decisions.',
+    detail: 'The 3DS Server obtains the 3DS Requestor ID, 3DS Server Reference Number, and Acquirer BIN. It determines the highest common protocol version from the cached PRes, establishes a secure link with the DS, and formats the AReq message for the active device channel: `deviceChannel = 02` for browser with browser telemetry, or `deviceChannel = 01` for app with SDK identifiers, encrypted SDK data, and SDK capability fields. In both paths it preserves the requestor challenge preference and other risk-relevant data elements.',
     userExperience: 'Silent — internal step.',
     whyItMatters: 'The 3DS Server is the one that defines the AReq structure and selects the version. It stitches together data from the requestor, the browser fingerprint, and the cached PRes into one AReq envelope, while ensuring browser data is transaction-unique and not hard-coded.',
     approxTime: '~5–20 ms',
@@ -875,7 +947,7 @@ export const FLOW_STEPS: FlowStep[] = [
     id: 'step_8a',
     num: '8a',
     label: 'Validates AReq & Generates ACS Trans ID',
-    detail: 'The ACS receives the AReq from the DS, validates it per §5.9.2, checks device support using Browser Information (§A.6), retrieves data from a previous 3DS Method execution (if 3DS Method ID is present), and generates the ACS Transaction ID.',
+    detail: 'The ACS receives the AReq from the DS, validates it per §5.9.2, checks device support using the channel-appropriate data set, retrieves data from a previous 3DS Method execution for browser flows when present, validates SDK-facing challenge inputs for app flows, and generates the ACS Transaction ID.',
     userExperience: 'Silent.',
     whyItMatters: 'This is the correlation step: ACS matches the incoming AReq\'s 3DS Server Trans ID with the fingerprint it stored during step 4b. If the IDs don\'t match, the fingerprint is discarded.',
     approxTime: '~10–50 ms',
@@ -902,7 +974,7 @@ export const FLOW_STEPS: FlowStep[] = [
     label: 'Risk-Based Authentication Decision',
     detail: 'The ACS evaluates the AReq data — including the 3DS Requestor Challenge Indicator, Authentication Indicator, Decoupled Request Indicator, and all browser/device signals — to determine the Transaction Status. If the result is `C`, the downstream 3DS Server/3DS Requestor will later evaluate the 3DS Requestor Challenge Indicator, the ACS Challenge Mandated Indicator, and the ACS Rendering Type before deciding whether to actually perform the browser challenge.',
     userExperience: 'Silent — this is the key moment. The ACS is making a risk decision in real time that determines whether the user will be challenged or pass frictionlessly.',
-    whyItMatters: 'This single decision splits the entire flow: Y/A → success, N → reject, R → issuer rejected, C → challenge, D → decoupled auth. The frictionless path exits here.',
+    whyItMatters: 'This single decision splits the entire flow: Y = authenticated, A = attempts, N/R = negative, C = challenge, D = decoupled. The direct ARes path exits here.',
     approxTime: '~50–500 ms (risk engine latency)',
     userVisibility: 'silent',
     groupId: 'acs_decision',
@@ -1002,28 +1074,30 @@ export const FLOW_STEPS: FlowStep[] = [
   // "Receives ARes, communicates result to 3DS Requestor."
   // ──────────────────────────────────────────────────────────────
 
-  // Success Path (Y/A)
+  // Direct ARes Path (Y/A)
   {
     id: 'step_10a',
     num: '10',
-    label: 'transStatus = Y/A → Authenticated',
-    detail: 'The 3DS Server receives and validates the ARes per §5.9.4. For an authenticated transaction (Y or A), it ensures the Transaction Status, ECI, and Authentication Value (CAVV) are provided for the authorization process and sends them to the 3DS Requestor Environment.',
+    label: 'transStatus = Y/A → Direct ARes Outcome',
+    detail: 'The 3DS Server receives and validates the ARes per §5.9.4. For `Y`, the issuer authenticated the transaction and the ACS-provided ECI and Authentication Value are carried forward for authorisation. For `A`, the issuer recorded an attempts result rather than full authentication, so the requestor must preserve the attempts semantics instead of treating it as equivalent to `Y`.',
     userExperience: 'Silent — the user still sees only the "Pay" button click they made earlier. The page will progress to confirmation.',
-    whyItMatters: 'The 3DS Server signs the result with CAVV, which the merchant must include in the standard auth message. The CAVV is what the issuer checks later in the dispute flow.',
+    whyItMatters: 'The ACS, not the 3DS Server, creates the authentication value. The 3DS Server must preserve what the issuer returned and keep `A` distinct from a fully authenticated `Y` outcome.',
     approxTime: '~5–30 ms',
     userVisibility: 'visible',
     groupId: 'ares',
     source: 'S',
     target: 'RE',
-    specRef: '§3.3 Step 10 — [Req 115, 116] Authenticated result',
+    specRef: '§3.3 Step 10 — [Req 115, 116] Y/A result handling',
     payloadType: 'json',
-    payload: {
-      status: 'AUTHENTICATED',
-      transStatus: 'Y',
-      eci: '05',
-      authenticationValue: 'AAABBiiihH8DAAAAAABiSBI='
-    },
-    payloadTitle: 'Authentication Result (Success)',
+    payload: (s) => ({
+      status: s.transStatus === 'Y' ? 'AUTHENTICATED' : 'ATTEMPTS_PROCESSED',
+      transStatus: s.transStatus,
+      eci: s.transStatus === 'Y' ? '05' : '06',
+      authenticationValue: s.transStatus === 'Y'
+        ? 'AAABBiiihH8DAAAAAABiSBI='
+        : 'AAABCiQ1R2gDAAAAAABjTDE='
+    }),
+    payloadTitle: 'Direct ARes Result (Y/A)',
     isActive: (s) => s.dsRouting === 'normal' && (s.transStatus === 'Y' || s.transStatus === 'A')
   },
 
@@ -1055,10 +1129,10 @@ export const FLOW_STEPS: FlowStep[] = [
   {
     id: 'step_10c',
     num: '10',
-    label: 'transStatus = C → Start Browser Challenge',
-    detail: 'The 3DS Server receives the ARes with `transStatus = C`, evaluates the 3DS Requestor Challenge Indicator, the ACS Challenge Mandated Indicator, and the ACS Rendering Type, and then passes the challenge start data to the 3DS Requestor Environment. This data includes the ACS URL, rendering hints, and any cardholder information text that should be shown before the browser posts the CReq. If challenge is mandated by the ACS or by the requestor itself, the merchant-side opt-out branch is not available.',
-    userExperience: 'Visible — the checkout pauses and a challenge iframe or modal is about to appear.',
-    whyItMatters: 'This is the exact fork where frictionless ends. The browser challenge is initiated by the 3DS Server in browser flows, not by a 3DS SDK.',
+    label: 'transStatus = C → Start Challenge',
+    detail: 'The 3DS Server receives the ARes with `transStatus = C`, evaluates the 3DS Requestor Challenge Indicator, the ACS Challenge Mandated Indicator, and the ACS Rendering Type, and then passes the challenge-start data to the 3DS Requestor Environment. This handoff includes the ACS URL, rendering hints, and any cardholder information text needed to start the correct channel-specific path: browser POST + iframe in browser flows, or 3DS SDK challenge invocation in app flows. If challenge is mandated by the ACS or by the requestor itself, the requestor-side opt-out branch is not available.',
+    userExperience: 'Visible — the checkout pauses and the issuer challenge surface is about to appear.',
+    whyItMatters: 'This is the exact fork where frictionless ends. From here, the simulator must branch into the correct channel-specific challenge path instead of treating app as browser with different labels.',
     approxTime: '~5–30 ms',
     userVisibility: 'visible',
     groupId: 'challenge',
@@ -1085,9 +1159,9 @@ export const FLOW_STEPS: FlowStep[] = [
     id: 'step_10d',
     num: '10',
     label: 'transStatus = D → Decoupled Authentication',
-    detail: 'The 3DS Server receives the ARes with `transStatus = D` and, per [Req 327], passes the necessary ARes information to the 3DS Requestor Environment. There is no CReq, no challenge iframe, and no browser-side challenge UI. The ACS will authenticate the cardholder out-of-band and deliver the result via an RReq message at a later time.',
-    userExperience: 'Visible — the checkout pauses and the user is told to complete authentication in their banking app or another issuer-controlled channel.',
-    whyItMatters: 'This is the native browser decoupled path. The challenge never started; the issuer already opted into the asynchronous flow at ARes time, so the 3DS Server now waits for the ACS to send the RReq per [Req 347].',
+    detail: 'The 3DS Server receives the ARes with `transStatus = D` and, per [Req 327], passes the necessary ARes information to the 3DS Requestor Environment. There is no challenge CReq/CRes loop here and no interactive challenge surface is started. The ACS will authenticate the cardholder out-of-band and deliver the result via an RReq message at a later time.',
+    userExperience: 'Visible — the checkout pauses and the user is told to complete authentication in another issuer-controlled channel.',
+    whyItMatters: 'This is the direct decoupled path. The challenge never started; the issuer already opted into the asynchronous flow at ARes time, so the 3DS Server now waits for the ACS to send the RReq per [Req 347].',
     approxTime: '~5–30 ms (then async)',
     userVisibility: 'visible',
     groupId: 'ares',
@@ -1196,7 +1270,7 @@ export const FLOW_STEPS: FlowStep[] = [
   },
   {
     id: 'step_11a',
-    num: '11a',
+    num: '10h',
     label: 'Builds CReq Form (3DS Server → Browser)',
     detail: 'The 3DS Server formats the browser CReq message, Base64url-encodes it, and constructs an HTML form containing `creq`, `threeDSRequestorURL` (the merchant notificationURL that the ACS will POST the final CRes back to), and `threeDSSessionData` (merchant-supplied opaque session reference, also Base64url). The 3DS Server picks an iframe size from the `challengeWindowSize` enumeration in the ARes and uses it to create the challenge window. The 3DS Requestor then causes the browser to POST that form to the ACS URL from the ARes, falling back to a non-JS redirect ([Req 324]) if the browser has JavaScript disabled.',
     userExperience: 'Visible — the browser is redirected into the challenge iframe or modal container; the cardholder is now in the issuer-controlled authentication surface.',
@@ -1252,13 +1326,13 @@ export const FLOW_STEPS: FlowStep[] = [
       }
     },
     payloadTitle: 'Browser CReq Form POST (§5.8.2)',
-    isActive: (s) => s.dsRouting === 'normal' && s.transStatus === 'C'
+    isActive: (s) => s.deviceChannel !== 'app' && s.dsRouting === 'normal' && s.transStatus === 'C'
   },
   {
     id: 'step_11b',
-    num: '11b',
-    label: 'Browser POSTs CReq → ACS (Iframe Created)',
-    detail: 'The browser opens the challenge iframe and submits the encoded CReq form to the ACS URL over the challenge channel. The ACS receives the CReq from the browser and validates it before preparing the issuer-controlled challenge UI. The iframe is hosted by the merchant page but its contents come entirely from the ACS. If the browser session is refreshed or recovered after a transient failure, the 3DS Server / 3DS Requestor may resend an identical CReq; the ACS may reject it as a duplicate or accept it and either restart or continue the challenge.',
+    num: '10i',
+    label: 'Browser POSTs CReq → ACS',
+    detail: 'The browser opens the challenge iframe and submits the encoded CReq form to the ACS URL over the challenge channel. The iframe is hosted by the merchant page but its contents come entirely from the ACS. Once the POST lands, the next normative step is the ACS-side CReq validation and challenge-state initialization in Step 11.',
     userExperience: 'Visible — the challenge frame loads and begins rendering issuer content.',
     whyItMatters: 'The ACS owns the challenge user interface from this point onward. The merchant can host the frame, but it cannot control the authentication content inside it. The sandbox attributes (allow-forms, allow-scripts, allow-same-origin, allow-pointer-lock only) keep the issuer surface isolated from the merchant page.',
     approxTime: '~100–250 ms',
@@ -1277,13 +1351,84 @@ export const FLOW_STEPS: FlowStep[] = [
       }
     },
     payloadTitle: 'ACS Challenge Request',
+    isActive: (s) => s.deviceChannel !== 'app' && s.dsRouting === 'normal' && s.transStatus === 'C'
+  },
+  {
+    id: 'step_11c',
+    num: '10h',
+    label: 'Requestor App Invokes 3DS SDK Challenge',
+    detail: 'For app-based challenge, the 3DS Requestor App passes the ARes challenge data into the on-device 3DS SDK. The SDK binds the `sdkTransID`, ACS transaction identifiers, and rendering hints, then prepares the protected SDK challenge channel to the ACS. This is not a browser form POST and it does not depend on an iframe.',
+    userExperience: 'Visible — the app transitions from checkout into an issuer-controlled challenge sheet or screen.',
+    whyItMatters: 'App challenge setup is SDK-originated. Treating this as a browser CReq form handoff misstates who owns the client transport and where the protected channel begins.',
+    approxTime: '~20–80 ms',
+    userVisibility: 'visible',
+    groupId: 'challenge',
+    source: 'RE',
+    target: 'BR',
+    specRef: 'App-based challenge start — SDK invocation before the first SDK CReq/CRes exchange',
+    payloadType: 'json',
+    payload: {
+      action: 'START_SDK_CHALLENGE',
+      sdkTransID: 'sdk-tx-001',
+      acsTransID: 'c7d8e9f0-a1b2-c3d4-e5f6-a7b8c9d0e1f2',
+      acsURL: 'https://acs.issuer-bank.com/challenge',
+      acsRenderingType: { acsInterface: '01', acsUiTemplate: '01' },
+      sdkReferenceNumber: '3DS_LOA_SDK_PPFU_020100_00007'
+    },
+    payloadTitle: '3DS SDK Challenge Start',
+    isActive: (s) => s.deviceChannel === 'app' && s.dsRouting === 'normal' && s.transStatus === 'C'
+  },
+  {
+    id: 'step_11d',
+    num: '10i',
+    label: '3DS SDK Sends Initial CReq → ACS',
+    detail: 'The 3DS SDK constructs the initial app challenge request and sends it to the ACS over the SDK/ACS protected channel. Unlike browser challenge, this request originates on-device from the SDK and carries the SDK transaction binding rather than relying on a browser form post.',
+    userExperience: 'Visible — the app is loading the issuer challenge state, but the cardholder has not yet entered proof.',
+    whyItMatters: 'This is the first wire step of the app challenge lane. It is what turns the app path into a real SDK exchange instead of a browser-shaped emulation.',
+    approxTime: '~50–150 ms',
+    userVisibility: 'visible',
+    groupId: 'challenge',
+    source: 'BR',
+    target: 'ACS',
+    specRef: 'App-based challenge — initial SDK CReq → ACS',
+    payloadType: 'json',
+    messageType: 'CReq',
+    payloadTitle: 'SDK CReq Message',
+    isActive: (s) => s.deviceChannel === 'app' && s.dsRouting === 'normal' && s.transStatus === 'C'
+  },
+  {
+    id: 'step_11',
+    num: '11',
+    label: 'ACS Validates CReq & Initializes Challenge State',
+    detail: 'The ACS receives the initial challenge request and validates it per §5.9.6. If the request is valid, the ACS prepares the authentication UI, sets the `interactionCounter` to `0`, and readies the issuer-controlled challenge state. If the ACS receives more than one CReq for the same challenge, [Req 442] allows it either to restart/continue the challenge or to return an Error Message.',
+    userExperience: 'Visible — the issuer challenge surface is loading, but the cardholder has not yet been asked to enter proof.',
+    whyItMatters: 'This is the ACS state-initialization boundary for both browser and app challenge. The `interactionCounter = 0` starting point is what makes the later Step 15 increment-and-compare logic correct, and duplicate-CReq handling is explicitly part of the protocol rather than implementation-specific behavior.',
+    approxTime: '~10–80 ms',
+    userVisibility: 'visible',
+    groupId: 'challenge',
+    source: 'ACS',
+    target: null,
+    specRef: '§3.3 Step 11 — ACS receives CReq [Req 119–121, 442]',
+    payloadType: 'json',
+    payload: {
+      messageType: 'CReq',
+      validationStatus: 'SUCCESS',
+      interactionCounter: 0,
+      acsUiPrepared: true,
+      duplicateCReqHandling: [
+        'restart_or_continue_challenge',
+        'return_error_message'
+      ],
+      duplicateErrorCodes: ['314', '315']
+    },
+    payloadTitle: 'ACS CReq Validation & Challenge Init',
     isActive: (s) => s.dsRouting === 'normal' && s.transStatus === 'C'
   },
   {
     id: 'step_12',
     num: '12',
     label: 'Renders ACS Challenge UI',
-    detail: 'The ACS prepares the authentication UI and sends it to the browser over the same challenge channel. For browser-based challenge, the ACS must allow the UI to be framed and must keep the cardholder inside the authentication flow rather than redirecting them to unrelated pages.',
+    detail: 'After Step 11 validation and state initialization, the ACS sends the prepared authentication UI to the browser over the same challenge channel. For browser-based challenge, the ACS must allow the UI to be framed and must keep the cardholder inside the authentication flow rather than redirecting them to unrelated pages.',
     userExperience: 'Visible — the cardholder now sees the issuer challenge UI, such as an OTP prompt or issuer approval instructions.',
     whyItMatters: 'This is the issuer-controlled trust boundary. The user is no longer looking at merchant content; they are interacting directly with the ACS challenge surface.',
     approxTime: '~50–200 ms',
@@ -1300,7 +1445,7 @@ export const FLOW_STEPS: FlowStep[] = [
       frameAllowed: true
     },
     payloadTitle: 'ACS Challenge UI',
-    isActive: (s) => s.dsRouting === 'normal' && s.transStatus === 'C' && s.challengePresentation === 'html'
+    isActive: (s) => s.deviceChannel !== 'app' && s.dsRouting === 'normal' && s.transStatus === 'C' && s.challengePresentation === 'html'
   },
   {
     id: 'step_12b',
@@ -1324,14 +1469,46 @@ export const FLOW_STEPS: FlowStep[] = [
       oob: true
     },
     payloadTitle: 'ACS OOB Instructions',
-    isActive: (s) => s.dsRouting === 'normal' && s.transStatus === 'C' && s.challengePresentation === 'oob'
+    isActive: (s) => s.deviceChannel !== 'app' && s.dsRouting === 'normal' && s.transStatus === 'C' && s.challengePresentation === 'oob'
+  },
+  {
+    id: 'step_12c',
+    num: '12',
+    label: 'ACS CRes Drives SDK Challenge UI',
+    detail: 'For app-based challenge, the ACS returns a CRes over the SDK challenge channel and the 3DS SDK renders the issuer-directed challenge UI according to `acsRenderingType`. Depending on the ACS response, the SDK may render native or HTML content, or present OOB instructions while still keeping the state machine inside the SDK challenge loop.',
+    userExperience: 'Visible — the cardholder now sees an issuer-controlled challenge screen inside the app.',
+    whyItMatters: 'App challenge UI is driven by ACS CRes messages and SDK rendering rules, not by a browser iframe. This is the core difference between the SDK lane and the browser lane.',
+    approxTime: '~50–200 ms',
+    userVisibility: 'visible',
+    groupId: 'challenge',
+    source: 'ACS',
+    target: 'BR',
+    specRef: 'App-based challenge — SDK-rendered UI from ACS CRes / acsRenderingType',
+    payloadType: 'json',
+    payload: (s) => ({
+      messageType: 'CRes',
+      sdkTransID: 'sdk-tx-001',
+      acsTransID: 'c7d8e9f0-a1b2-c3d4-e5f6-a7b8c9d0e1f2',
+      acsRenderingType: {
+        acsInterface: '01',
+        acsUiTemplate: s.challengePresentation === 'oob' ? '04' : '01',
+      },
+      challengeInfoHeader: s.challengePresentation === 'oob'
+        ? 'Approve this purchase in your issuer app.'
+        : 'Confirm your identity to continue.',
+      challengeInfoLabel: s.challengePresentation === 'oob'
+        ? 'Out-of-band authentication pending'
+        : 'Enter the proof requested by your issuer'
+    }),
+    payloadTitle: 'SDK Challenge UI (CRes)',
+    isActive: (s) => s.deviceChannel === 'app' && s.dsRouting === 'normal' && s.transStatus === 'C'
   },
   {
     id: 'step_13',
     num: '13',
     label: 'Cardholder Enters Challenge Data',
-    detail: 'The Cardholder interacts with the issuer challenge UI and enters the requested authentication data, such as an OTP or other proof required by the ACS.',
-    userExperience: 'Visible — this is the one clearly interactive part of the browser challenge flow.',
+    detail: 'The Cardholder interacts with the issuer challenge UI and enters the requested authentication data, such as an OTP or other proof required by the ACS. In browser flows this happens in the iframe; in app flows it happens in the SDK-rendered challenge surface.',
+    userExperience: 'Visible — this is the clearly interactive part of the challenge flow.',
     whyItMatters: 'Challenge flow exists specifically because the ACS could not authenticate the transaction frictionlessly. This is where the extra proof is collected.',
     approxTime: '~5–60 s (user-driven)',
     userVisibility: 'visible',
@@ -1352,7 +1529,7 @@ export const FLOW_STEPS: FlowStep[] = [
     id: 'step_13b',
     num: '13',
     label: 'Cardholder Authenticates Out-of-Band',
-    detail: 'The Cardholder leaves the merchant interaction context and authenticates using the issuer-controlled OOB channel named in the ACS instructions, such as a banking app or issuer website. The exact OOB communication mechanism is outside the scope of the EMV 3DS Core Spec; the browser iframe simply waits for the ACS to learn the outcome.',
+    detail: 'The Cardholder leaves the merchant interaction context and authenticates using the issuer-controlled OOB channel named in the ACS instructions, such as a banking app or issuer website. The exact OOB communication mechanism is outside the scope of the EMV 3DS Core Spec; the active client surface simply waits for the ACS to learn the outcome.',
     userExperience: 'Visible — the cardholder follows issuer instructions outside the challenge iframe, then returns once approval is complete.',
     whyItMatters: 'This is the browser-channel OOB variant the spec calls out. The browser challenge flow does not disappear; it becomes an instruction-and-wait experience rather than a data-entry experience.',
     approxTime: '~5–60 s (user-driven)',
@@ -1373,10 +1550,10 @@ export const FLOW_STEPS: FlowStep[] = [
   {
     id: 'step_14',
     num: '14',
-    label: 'Browser Submits Challenge Data → ACS',
-    detail: 'The browser sends the entered challenge data back to the ACS over the challenge channel established when the browser posted the initial CReq.',
+    label: 'Client Sends Challenge Response → ACS',
+    detail: 'The active client channel sends the entered challenge data back to the ACS. In browser flows the browser posts the challenge data over the existing challenge channel; in app flows the 3DS SDK constructs a follow-up CReq and sends it over the SDK/ACS protected channel.',
     userExperience: 'Visible — the challenge screen briefly shows a spinner while the issuer validates the response.',
-    whyItMatters: 'This is the cardholder proof entering the issuer decision engine. In browser flows the browser posts the challenge result directly back to the ACS.',
+    whyItMatters: 'This is the cardholder proof entering the issuer decision engine. The exact wire carrier differs by channel, but this is the same protocol boundary.',
     approxTime: '~50–150 ms',
     userVisibility: 'visible',
     groupId: 'challenge',
@@ -1387,7 +1564,7 @@ export const FLOW_STEPS: FlowStep[] = [
     payload: {
       challengeDataEntry: '123456',
       challengeHTMLDataEntry: 'otp=123456',
-      messageType: 'Browser challenge submit'
+      messageType: 'Challenge response submit'
     },
     payloadTitle: 'Challenge Data Submission',
     isActive: (s) => s.dsRouting === 'normal' && s.transStatus === 'C' && s.challengePresentation === 'html'
@@ -1395,10 +1572,10 @@ export const FLOW_STEPS: FlowStep[] = [
   {
     id: 'step_14b',
     num: '14',
-    label: 'Browser Resumes / ACS Polls OOB Result',
-    detail: 'After the cardholder completes the OOB action, the browser challenge session resumes and the ACS determines whether the OOB authentication succeeded. The exact OOB messaging path is outside the scope of the Core Spec; what matters for the browser flow is that the ACS now has enough information to continue at Step 15.',
-    userExperience: 'Visible — the challenge iframe remains on an issuer waiting screen while the ACS completes the out-of-band check.',
-    whyItMatters: 'This is the browser-side handoff back into the standard Step 15 decision logic. The OOB mechanism is external, but the browser flow still rejoins the same challenge-state machine.',
+    label: 'Client Resumes / ACS Polls OOB Result',
+    detail: 'After the cardholder completes the OOB action, the active client challenge session resumes and the ACS determines whether the OOB authentication succeeded. The exact OOB messaging path is outside the scope of the Core Spec; what matters is that the ACS now has enough information to continue at Step 15.',
+    userExperience: 'Visible — the challenge surface remains on an issuer waiting screen while the ACS completes the out-of-band check.',
+    whyItMatters: 'This is the handoff back into the standard Step 15 decision logic. The OOB mechanism is external, but the challenge flow still rejoins the same state machine.',
     approxTime: '~50–500 ms',
     userVisibility: 'visible',
     groupId: 'challenge',
@@ -1409,7 +1586,7 @@ export const FLOW_STEPS: FlowStep[] = [
     payload: {
       challengeDataEntry: null,
       oobResultState: 'PENDING_OR_READY',
-      messageType: 'Browser challenge continue'
+      messageType: 'Challenge continue'
     },
     payloadTitle: 'OOB Continuation',
     isActive: (s) => s.dsRouting === 'normal' && s.transStatus === 'C' && s.challengePresentation === 'oob'
@@ -1419,8 +1596,8 @@ export const FLOW_STEPS: FlowStep[] = [
     num: '15',
     label: 'ACS Evaluates Challenge Submission',
     detail: 'The ACS checks the submitted challenge data, increments the interaction counter, and determines whether the challenge succeeded, failed, was cancelled, or should fall back to decoupled authentication. Per §5.8.2 [several HTML interactions note] and §3.3 Step 15, the ACS may loop back to Step 12 to render another challenge UI until either a final decision is reached or `acsMaxChallenges` is exhausted.',
-    userExperience: 'Visible — the challenge iframe remains active while the issuer decides whether the submitted proof is acceptable.',
-    whyItMatters: 'This is the issuer-side authentication decision for the browser challenge. It drives the later RReq and final CRes, and the loop decision is what makes the model a true state machine instead of a single pass.',
+    userExperience: 'Visible — the challenge surface remains active while the issuer decides whether the submitted proof is acceptable.',
+    whyItMatters: 'This is the issuer-side authentication decision for the challenge flow. It drives the later RReq and final completion signal, and the loop decision is what makes the model a true state machine instead of a single pass.',
     approxTime: '~100–500 ms',
     userVisibility: 'visible',
     groupId: 'challenge',
@@ -1445,9 +1622,9 @@ export const FLOW_STEPS: FlowStep[] = [
     id: 'step_15b',
     num: '15b',
     label: 'Loop Back: ACS Re-renders Challenge UI',
-    detail: 'When the ACS decides that another challenge interaction is required (e.g. the cardholder entered a wrong OTP), it loops back to Step 12 and renders a fresh challenge UI inside the same iframe. Each loop increments the interaction counter, and the loop ends when the ACS reaches a final decision or `acsMaxChallenges`. The merchant must not close the iframe while the loop is active.',
-    userExperience: 'Visible — the cardholder sees a new challenge prompt without the page ever leaving the iframe.',
-    whyItMatters: 'The browser challenge is allowed to have several HTML interactions per [§5.8.2]. Without this loop, the diagram under-models the most common real-world failure case (transient OTP mismatch) and the retry behaviour the spec allows.',
+    detail: 'When the ACS decides that another challenge interaction is required (e.g. the cardholder entered a wrong OTP), it loops back to Step 12 and renders a fresh challenge UI inside the active client surface. From there, the challenge re-runs Steps 12–15: the ACS re-renders the UI, the cardholder re-enters proof, the client re-submits it, and the ACS evaluates again. Each loop increments the interaction counter, and the loop ends when the ACS reaches a final decision or `acsMaxChallenges`. The requestor must not prematurely close the challenge surface while the loop is active.',
+    userExperience: 'Visible — the cardholder sees a new challenge prompt without leaving the challenge surface.',
+    whyItMatters: 'Challenge is allowed to have several interactions per [§5.8.2]. Without this loop, the diagram under-models the most common real-world failure case (transient OTP mismatch) and the retry behaviour the spec allows.',
     approxTime: '~1–5 s (user-driven)',
     userVisibility: 'visible',
     groupId: 'challenge',
@@ -1459,7 +1636,8 @@ export const FLOW_STEPS: FlowStep[] = [
       loop: true,
       interactionCounter: 2,
       newUi: 'OTP_HTML_v2',
-      retryAllowed: true
+      retryAllowed: true,
+      rerunsSteps: ['12', '13', '14', '15']
     },
     payloadTitle: 'ACS Challenge Retry',
     isActive: (s) => s.dsRouting === 'normal' && s.transStatus === 'C' && s.repeatChallenge
@@ -1646,9 +1824,9 @@ export const FLOW_STEPS: FlowStep[] = [
     id: 'step_20',
     num: '20',
     label: 'ACS Receives RRes',
-    detail: 'The ACS validates the RRes. For browser challenge this is the point where the server-side results exchange is complete and the ACS can post the final CRes back through the browser. For Decoupled Authentication there is no browser post at all — the ACS closes the RRes loop and finishes asynchronously.',
-    userExperience: 'Silent for the direct decoupled and opt-out paths. For the challenge paths the browser challenge is about to resolve and close.',
-    whyItMatters: 'The challenge is not finished just because the user submitted data. The ACS still needs the server-side acknowledgement loop before it posts the final browser-facing CRes. For decoupled paths the ACS simply closes the RRes loop and continues authenticating out-of-band.',
+    detail: 'The ACS validates the RRes. For interactive challenge this is the point where the server-side results exchange is complete and the ACS can emit the final client-facing completion signal through the browser or SDK. For direct Decoupled Authentication there is no client-facing post at all — the ACS closes the RRes loop and finishes asynchronously.',
+    userExperience: 'Silent for the direct decoupled and opt-out paths. For interactive challenge paths the challenge surface is about to resolve and close.',
+    whyItMatters: 'The challenge is not finished just because the user submitted data. The ACS still needs the server-side acknowledgement loop before it emits the final client-facing completion signal. For decoupled paths the ACS simply closes the RRes loop and continues authenticating out-of-band.',
     approxTime: '~10–30 ms',
     userVisibility: 'visible',
     groupId: 'results',
@@ -1691,7 +1869,7 @@ export const FLOW_STEPS: FlowStep[] = [
       }
     },
     payloadTitle: 'Final CRes POST (Success)',
-    isActive: (s) => s.dsRouting === 'normal' && s.transStatus === 'C' && s.challengeOutcome === 'success'
+    isActive: (s) => s.deviceChannel !== 'app' && s.dsRouting === 'normal' && s.transStatus === 'C' && s.challengeOutcome === 'success'
   },
   {
     id: 'step_21b',
@@ -1721,7 +1899,7 @@ export const FLOW_STEPS: FlowStep[] = [
       }
     },
     payloadTitle: 'Final CRes POST (Failure)',
-    isActive: (s) => s.dsRouting === 'normal' && s.transStatus === 'C' && (s.challengeOutcome === 'failure' || s.challengeOutcome === 'cancelled')
+    isActive: (s) => s.deviceChannel !== 'app' && s.dsRouting === 'normal' && s.transStatus === 'C' && (s.challengeOutcome === 'failure' || s.challengeOutcome === 'cancelled')
   },
   {
     id: 'step_21c',
@@ -1752,7 +1930,64 @@ export const FLOW_STEPS: FlowStep[] = [
       }
     },
     payloadTitle: 'Final CRes POST (Decoupled)',
-    isActive: (s) => s.dsRouting === 'normal' && s.transStatus === 'C' && s.challengeOutcome === 'decoupled'
+    isActive: (s) => s.deviceChannel !== 'app' && s.dsRouting === 'normal' && s.transStatus === 'C' && s.challengeOutcome === 'decoupled'
+  },
+  {
+    id: 'step_21d',
+    num: '21',
+    label: 'ACS Returns Final CRes → 3DS SDK',
+    detail: 'For app-based challenge, the ACS returns the final CRes over the SDK challenge channel. The payload closes the issuer-controlled challenge exchange and carries the final status needed by the 3DS SDK to finish the on-device challenge session.',
+    userExperience: 'Visible — the app challenge is resolving and is about to hand control back to the requestor app.',
+    whyItMatters: 'This is the app analogue of the browser notification callback. The completion artifact is still a CRes, but it is delivered through the SDK lane instead of a browser POST.',
+    approxTime: '~50–120 ms',
+    userVisibility: 'visible',
+    groupId: 'results',
+    source: 'ACS',
+    target: 'BR',
+    specRef: 'App-based challenge completion — final CRes returned to 3DS SDK',
+    payloadType: 'json',
+    messageType: 'CRes',
+    payloadTitle: 'Final CRes → 3DS SDK',
+    isActive: (s) =>
+      s.deviceChannel === 'app'
+      && s.dsRouting === 'normal'
+      && s.transStatus === 'C'
+      && (s.challengeOutcome === 'success' || s.challengeOutcome === 'failure' || s.challengeOutcome === 'cancelled' || s.challengeOutcome === 'decoupled' || s.challengeOutcome === 'invalid_cres')
+  },
+  {
+    id: 'step_21e',
+    num: '21',
+    label: '3DS SDK Returns Result → Requestor App',
+    detail: 'After validating the final app challenge result, the 3DS SDK returns the completion data to the 3DS Requestor App so the merchant-side application can close the challenge surface and resume checkout logic. If the final CRes is malformed or inconsistent, the requestor app must reject it rather than treating the challenge as successful.',
+    userExperience: 'Visible — the app leaves the issuer challenge view and returns to the merchant checkout context.',
+    whyItMatters: 'This is the missing app-facing completion handoff. Without it, the simulator still collapses the app results path into the browser notification model.',
+    approxTime: '~10–50 ms',
+    userVisibility: 'visible',
+    groupId: 'results',
+    source: 'BR',
+    target: 'RE',
+    specRef: 'App-based challenge completion — SDK callback into the requestor app',
+    payloadType: 'json',
+    payload: (s) => ({
+      source: '3DS_SDK',
+      sdkTransID: 'sdk-tx-001',
+      transStatus:
+        s.challengeOutcome === 'success'
+          ? 'Y'
+          : s.challengeOutcome === 'decoupled'
+            ? 'N'
+            : 'N',
+      challengeCompletionInd: 'Y',
+      cardholderInfoText: s.challengeOutcome === 'decoupled'
+        ? 'Authentication will continue in your banking app.'
+        : 'Challenge session completed.',
+    }),
+    payloadTitle: 'SDK Challenge Completion Callback',
+    isActive: (s) =>
+      s.deviceChannel === 'app'
+      && s.dsRouting === 'normal'
+      && s.transStatus === 'C'
+      && (s.challengeOutcome === 'success' || s.challengeOutcome === 'failure' || s.challengeOutcome === 'cancelled' || s.challengeOutcome === 'decoupled' || s.challengeOutcome === 'invalid_cres')
   },
 
   // ──────────────────────────────────────────────────────────────
@@ -1764,10 +1999,10 @@ export const FLOW_STEPS: FlowStep[] = [
   {
     id: 'step_22a',
     num: '22',
-    label: 'Continues Checkout (Authenticated)',
-    detail: '3DS processing completes. The 3DS Requestor Environment continues the checkout. For Payment Authentication, the ECI and CAVV are submitted with the standard authorization request to the Acquirer/Payment System.',
+    label: 'Continues Checkout (Authenticated or Attempts)',
+    detail: '3DS processing completes. For a challenge-derived success, the 3DS Requestor Environment first receives the final completion artifact through the channel-appropriate callback (`notificationURL` in browser, SDK completion callback in app), closes the active challenge surface, and then continues checkout. For the direct ARes path, there is no challenge callback at all. `Y` continues with the authenticated ECI and Authentication Value returned by the ACS, while `A` continues with attempts semantics and must not be mislabeled as full authentication.',
     userExperience: 'Visible — the user finally sees the order confirmation page. From the user\'s perspective, the whole 3DS dance took <1 s.',
-    whyItMatters: '3DS ends here. Everything after this is normal payment authorization — same as a non-3DS card transaction, just with the ECI and CAVV attached.',
+    whyItMatters: '3DS ends here, but the merchant still has to preserve the issuer outcome correctly. `Y` and challenge-success are authenticated results; `A` is an attempts result with different downstream meaning.',
     approxTime: '~0.1–2 s (depends on auth)',
     userVisibility: 'visible',
     groupId: 'completion',
@@ -1775,13 +2010,19 @@ export const FLOW_STEPS: FlowStep[] = [
     target: 'BR',
     specRef: '§3.3 Step 22 — 3DS Requestor Environment (end of 3DS)',
     payloadType: 'json',
-    payload: {
+    payload: (s) => ({
       action: 'SUBMIT_AUTHORIZATION',
       amount: '279.98',
-      eci: '05',
-      cavv: 'AAABBiiihH8DAAAAAABiSBI=',
-      note: '3DS processing complete. Payment authorization is outside 3DS scope.'
-    },
+      eci: s.transStatus === 'A' ? '06' : '05',
+      cavv: s.transStatus === 'A'
+        ? 'AAABCiQ1R2gDAAAAAABjTDE='
+        : 'AAABBiiihH8DAAAAAABiSBI=',
+      notificationUrlHandled: true,
+      iframeClosedIfChallenge: true,
+      note: s.transStatus === 'A'
+        ? '3DS processing complete with attempts semantics. Payment authorization is outside 3DS scope.'
+        : '3DS processing complete. Payment authorization is outside 3DS scope.'
+    }),
     payloadTitle: 'Checkout Continuation (Success)',
     isActive: (s) => s.dsRouting === 'normal' && ((s.transStatus === 'Y' || s.transStatus === 'A') || (s.transStatus === 'C' && s.challengeOutcome === 'success'))
   },
@@ -1789,7 +2030,7 @@ export const FLOW_STEPS: FlowStep[] = [
     id: 'step_22b',
     num: '22',
     label: 'Handles Authentication Failure',
-    detail: '3DS processing completes. The 3DS Requestor Environment takes appropriate action based on the negative Transaction Status. Options include prompting for an alternative card, declining the order (for R), or routing as a non-3DS transaction.',
+    detail: '3DS processing completes. For a challenge-derived failure, the 3DS Requestor Environment first receives the final completion artifact through the channel-appropriate callback, closes the challenge iframe or SDK surface, and then takes the appropriate action based on the negative Transaction Status. For frictionless N/U/R outcomes, the failure is conveyed directly from the ARes path without any challenge callback. Options include prompting for an alternative card, declining the order (for R), or routing as a non-3DS transaction.',
     userExperience: 'Visible — the user sees a clear failure message and is offered next steps (try a different card, contact their bank, etc.).',
     whyItMatters: 'The merchant can choose to retry, fall back to its own non-3DS risk model, or decline. Most merchants decline on R for liability reasons. The same merchant-side handling applies after a failed browser challenge.',
     approxTime: '<10 ms',
@@ -1801,6 +2042,8 @@ export const FLOW_STEPS: FlowStep[] = [
     payloadType: 'json',
     payload: {
       action: 'HANDLE_FAILURE',
+      notificationUrlHandled: true,
+      iframeClosedIfChallenge: true,
       options: [
         'Prompt for alternative card',
         'Reject order (for transStatus = R)',
@@ -1814,7 +2057,7 @@ export const FLOW_STEPS: FlowStep[] = [
     id: 'step_22c',
     num: '22',
     label: 'Shows Pending Decoupled Authentication',
-    detail: 'The browser challenge has closed, but the issuer will continue authentication outside the merchant page. The 3DS Requestor Environment shows a pending or informational state and may await later out-of-band confirmation from its 3DS Server.',
+    detail: 'After the ACS returns the final decoupled-fallback completion through the browser callback or SDK callback, the active challenge surface closes, but the issuer will continue authentication outside the merchant interaction context. The 3DS Requestor Environment shows a pending or informational state and may await later out-of-band confirmation from its 3DS Server.',
     userExperience: 'Visible — the user sees a message such as "Approve this transaction in your banking app" instead of an immediate success or failure.',
     whyItMatters: 'This is the merchant-facing UX for decoupled fallback. The browser challenge ends cleanly, but the authentication result is no longer immediate.',
     approxTime: '<10 ms',
@@ -1827,6 +2070,8 @@ export const FLOW_STEPS: FlowStep[] = [
     payload: {
       action: 'SHOW_PENDING',
       transStatus: 'D',
+      notificationUrlHandled: true,
+      iframeClosedIfChallenge: true,
       cardholderInfoText: 'Authentication will continue in your banking app.',
       nextStep: 'Wait for asynchronous issuer confirmation'
     },
@@ -1938,7 +2183,7 @@ export const FLOW_STEPS: FlowStep[] = [
     label: 'ACS Posts Error Message to notificationURL',
     detail: 'If the ACS cannot serve the challenge at all, it posts an Error Message (containing errorCode, errorComponent, errorDescription, errorDetail) to the `threeDSRequestorURL` from the CReq instead of posting a final CRes. The Error Message is itself a POST form, and the 3DS Requestor must handle it as a transport-level error and end 3DS processing.',
     userExperience: 'Visible — the challenge iframe never finishes rendering; the merchant may show a generic decline or "try again" page.',
-    whyItMatters: 'The Error Message is the spec-defined transport for "ACS could not serve the challenge". Without this step, the app cannot represent the case where the ACS genuinely fails to deliver a challenge (timeout, internal ACS error, unsupported device).',
+    whyItMatters: 'The Error Message is the spec-defined browser transport for "ACS could not serve the challenge". Keeping it browser-only prevents the simulator from implying that SDK challenge failures return through the same notificationURL callback.',
     approxTime: '~50–500 ms (or immediate on timeout)',
     userVisibility: 'visible',
     groupId: 'results',
@@ -1963,15 +2208,15 @@ export const FLOW_STEPS: FlowStep[] = [
       }
     },
     payloadTitle: 'ACS Error Message → notificationURL',
-    isActive: (s) => s.dsRouting === 'normal' && s.transStatus === 'C' && s.challengeOutcome === 'error'
+    isActive: (s) => s.deviceChannel !== 'app' && s.dsRouting === 'normal' && s.transStatus === 'C' && s.challengeOutcome === 'error'
   },
   {
     id: 'step_21_close',
     num: '21',
-    label: 'Browser Closes Challenge Iframe',
-    detail: 'When the ACS posts the final CRes (or an Error Message) to `threeDSRequestorURL`, the 3DS Requestor Environment MUST explicitly close the challenge iframe per [Req 811] and any custom CRes page that wraps it. The merchant is also responsible for refreshing the parent page so the new authentication state is reflected in the checkout UI.',
+    label: 'Client Closes Challenge Surface',
+    detail: 'When the final challenge result arrives, the requestor side must explicitly close the active challenge surface. In browser flows that means closing the challenge iframe per [Req 811] and refreshing the parent page if needed; in app flows it means dismissing the SDK challenge sheet or screen and returning control to the requestor app.',
     userExperience: 'Visible — the cardholder sees the challenge window disappear.',
-    whyItMatters: 'A common browser-flow defect is to leave the challenge iframe mounted after the CRes arrives. This breaks re-renders, blocks focus, and confuses cardholders. The spec calls for an explicit close.',
+    whyItMatters: 'A common defect is to leave the challenge surface mounted after completion. This breaks re-renders, blocks focus, and confuses cardholders. The requestor side is responsible for the close.',
     approxTime: '<10 ms',
     userVisibility: 'visible',
     groupId: 'completion',
@@ -1980,12 +2225,12 @@ export const FLOW_STEPS: FlowStep[] = [
     specRef: '§5.8.2 browser obligations; [Req 811] close the challenge window',
     payloadType: 'json',
     payload: {
-      action: 'CLOSE_CHALLENGE_IFRAME',
+      action: 'CLOSE_CHALLENGE_SURFACE',
       refresh: true,
-      reason: 'CRes received at threeDSRequestorURL',
-      policy: 'Do not leave the challenge iframe mounted; the merchant is responsible for the close.'
+      reason: 'Final challenge result received',
+      policy: 'Do not leave the browser iframe or SDK challenge view mounted after completion.'
     },
-    payloadTitle: 'Browser Closes Iframe',
+    payloadTitle: 'Client Closes Challenge Surface',
     isActive: (s) => s.dsRouting === 'normal' && s.transStatus === 'C' && (s.challengeOutcome === 'success' || s.challengeOutcome === 'failure' || s.challengeOutcome === 'cancelled' || s.challengeOutcome === 'decoupled')
   },
   {
@@ -2451,7 +2696,7 @@ export const SECURITY_LENS_BY_STEP: Record<string, SecurityLensNote> = {
     specHooks: ['Req 117 (opt-out branch)', 'Table B.9 resultsStatus']
   },
   step_11a: {
-    summary: 'The browser CReq form is the protocol handoff from server-side state to browser-side transport toward the ACS.',
+    summary: 'The browser CReq form is the Step 10 handoff from server-side state to browser-side transport toward the ACS.',
     abuseCases: [
       'Tamper with threeDSRequestorURL or threeDSSessionData handling to test callback and correlation weaknesses.',
       'Try malformed base64url CReq payloads and observe whether the merchant, browser, or ACS catches the problem.'
@@ -2464,10 +2709,10 @@ export const SECURITY_LENS_BY_STEP: Record<string, SecurityLensNote> = {
       'The browser should act as a transport layer, not originator of CReq semantics.',
       'Correlation data should be treated as opaque and optional, never as the sole truth source.'
     ],
-    specHooks: ['Req 117.b-e', 'Table A.3', '§5.8.2']
+    specHooks: ['Step 10', 'Req 117.b-e', 'Table A.3', '§5.8.2']
   },
   step_11b: {
-    summary: 'Once the browser posts CReq, refresh and resend behavior become important because repeated challenge traffic is explicitly called out by the spec.',
+    summary: 'Once the browser posts CReq, the transport leg is complete and the ACS-side Step 11 validation boundary begins.',
     abuseCases: [
       'Refresh or recover the page to see whether duplicate CReqs are sent and how the ACS reacts.',
       'Attempt out-of-order challenge delivery after the results path has already closed.'
@@ -2477,10 +2722,26 @@ export const SECURITY_LENS_BY_STEP: Record<string, SecurityLensNote> = {
       'Browser console and network traces around iframe lifecycle.'
     ],
     defenderChecks: [
-      'Duplicate challenge submissions should be handled deterministically and logged.',
+      'The merchant should treat this POST as transport only; the ACS decides whether challenge state is initialized or rejected.',
       'The merchant should not assume the first rendered challenge state is the final one.'
     ],
-    specHooks: ['§5.8.2', 'Req 442', 'Error codes 314 and 315 (one of two valid ACS responses per Req 442)']
+    specHooks: ['Step 10', '§5.8.2']
+  },
+  step_11: {
+    summary: 'ACS CReq validation is the state-initialization boundary of the browser challenge and the place where duplicate CReq handling becomes normative rather than implementation-defined.',
+    abuseCases: [
+      'Replay the same CReq and compare whether the ACS restarts, continues, or returns an Error Message.',
+      'Mutate identifiers or base64url content to verify that malformed CReq payloads terminate challenge processing cleanly.'
+    ],
+    observables: [
+      'CReq validation result, initial interactionCounter value, and whether the ACS prepares UI or returns an error.',
+      'Duplicate-CReq branch behavior, including restart/continue versus Error Message outcomes.'
+    ],
+    defenderChecks: [
+      'The ACS should initialize `interactionCounter = 0` before any cardholder submission is evaluated.',
+      'Duplicate CReq handling should be deterministic, logged, and auditable.'
+    ],
+    specHooks: ['Step 11', 'Req 119', 'Req 120', 'Req 121', 'Req 442']
   },
   step_12: {
     summary: 'The issuer-controlled challenge UI is where phishing resistance and origin trust matter most from the cardholder perspective.',
@@ -2512,7 +2773,7 @@ export const SECURITY_LENS_BY_STEP: Record<string, SecurityLensNote> = {
       'Loop limits must be enforced consistently by the ACS and reflected in merchant state.',
       'Repeated interactions should not produce contradictory terminal statuses.'
     ],
-    specHooks: ['§3.3 Step 15', 'Challenge interaction counter']
+    specHooks: ['§3.3 Step 15', 'Challenge interaction counter', 'Loop re-runs Steps 12–15']
   },
   step_16e: {
     summary: 'The decoupled direct RReq is the authoritative result carrier for asynchronous issuer authentication.',
@@ -2935,13 +3196,14 @@ export const STEP_GROUP_OVERVIEWS: StepGroupOverview[] = [
   },
   {
     id: 'challenge',
-    title: 'Step 10–15 — Browser Challenge',
+    title: 'Step 10 (CReq Handoff)–15 — Browser Challenge',
     specSection: '§3.3 Steps 10–15; §5.8.2; [Req 117, 119–123, 307, 356, 464]',
-    summary: 'The 3DS Server posts a browser CReq through the Cardholder Browser, the ACS renders challenge UI, and the Cardholder submits the requested proof to the issuer.',
+    summary: 'The 3DS Server posts a browser CReq through the Cardholder Browser, the ACS validates it and initializes challenge state, then the ACS renders challenge UI and the Cardholder submits the requested proof to the issuer.',
     whatHappens: [
       '3DS Server formats the browser CReq and Base64url-encodes it',
       '3DS Requestor Environment causes the Browser to POST the CReq form to the ACS URL from the ARes',
-      'ACS validates the CReq and prepares the framed challenge UI',
+      'ACS validates the CReq, sets `interactionCounter = 0`, and prepares the framed challenge UI',
+      'If the ACS receives a duplicate CReq, it either restarts/continues the challenge or returns an Error Message per [Req 442]',
       'Browser renders issuer-controlled HTML inside the challenge iframe',
       'Cardholder enters the requested proof (for example OTP)',
       'Browser submits the challenge data back to the ACS',
@@ -3077,7 +3339,7 @@ export const GLOSSARY: GlossaryEntry[] = [
  * the panel calls.
  */
 export const HIGH_RISK_STEPS = new Set<string>([
-  'step_10e', 'step_11a', 'step_11b', 'step_16e', 'step_16f', 'step_17',
+  'step_10e', 'step_11a', 'step_11b', 'step_11', 'step_16e', 'step_16f', 'step_17',
   'step_21a', 'step_21b', 'step_21c', 'step_22e',
 ]);
 

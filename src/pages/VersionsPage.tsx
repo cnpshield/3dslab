@@ -169,7 +169,7 @@ export function VersionsPage() {
             </li>
             <li>
               <strong>v2.2.0 → v2.3.1:</strong> The spec formally introduces <em>detached JWS</em> for AReq/ARes/RReq/RRes,
-              plus the new app-channel OReq/ORes pair. Split-SDK and Default-SDK variants of AReq become normative.
+              plus the new OReq/ORes operation-message pair. Split-SDK and Default-SDK variants of AReq become normative.
             </li>
             <li>
               <strong>v2.4.0 (draft):</strong> The lab previews the version selector but does not yet model the
@@ -217,7 +217,16 @@ export function VersionsPage() {
 
         <footer className="lp-foot">
           <p>
-            Author: Wasif Faisal, BRAC University. Wire-shape data is derived from the versioned payload registry in
+            Protocol Research & Specification Analysis by{' '}
+            <a
+              href="https://www.linkedin.com/in/cswasif/"
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontWeight: 700, color: 'var(--accent-primary)', textDecoration: 'underline' }}
+            >
+              Wasif Faisal
+            </a>{' '}
+            (BRAC University). Wire-shape data is derived from the versioned payload registry in
             this repository; v2.3.1 is anchored to Tables B.1–B.11 of the EMV 3DS v2.3.1 Core Spec. v2.1.0 and v2.2.0
             data is sourced from the 3dsecure.io re-typeset and is labelled non-authoritative in the lab UI.
           </p>

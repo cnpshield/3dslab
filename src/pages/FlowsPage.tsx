@@ -31,7 +31,7 @@ const FLOWS: Flow[] = [
     title: 'Frictionless flow',
     short: 'No cardholder interaction; risk decision made in-line by the issuer ACS.',
     intro:
-      'The ACS signals a low-risk transaction based on the AReq data. The 3DS Server returns the ARes to the 3DS Requestor with `transStatus = Y` without rendering a challenge UI.',
+      'The ACS completes the transaction on the AReq / ARes leg without moving into challenge. In a completed frictionless path there is no CReq / CRes and no RReq / RRes.',
     trigger: 'Issuer risk model returns "challenge not required" for the AReq data.',
     steps: [
       '3DS Requestor collects cardholder + device data, builds the AReq via the 3DS SDK / browser flow.',
@@ -51,39 +51,40 @@ const FLOWS: Flow[] = [
     ],
     citations: [
       'EMV 3DS v2.3.1 Core Spec §3.1 (Browser flow) and §4.1 (App flow).',
-      'EMV 3DS v2.3.1 Core Spec Table B.2 (ARes), B.8 (RReq), B.9 (RRes).',
+      'EMV 3DS v2.3.1 Core Spec Table B.2 (ARes).',
     ],
   },
   {
     id: 'challenge',
     title: 'Challenge flow',
-    short: 'Cardholder is redirected into the ACS challenge UI to complete an interactive authentication.',
+    short: 'Cardholder enters issuer-controlled challenge handling; browser and app channels use different transport for the same branch.',
     intro:
-      'The ACS signals that a challenge is required (or the 3DS Requestor has chosen to challenge). The 3DS Server returns a CReq, the browser POSTs the CRes, and only then does the merchant receive a final outcome.',
+      'The ACS returns `transStatus = C` in the ARes to signal that cardholder interaction is required. Browser and app challenges share the same high-level branch, but the browser path sends a 3DS Server-built `CReq` through the cardholder browser to `acsURL`, while the app path uses the 3DS SDK / ACS channel and may involve multiple SDK challenge exchanges.',
     trigger:
-      'ACS sets `transStatus = C` in the ARes and supplies an `acsURL` + `acsChallengeMandated` flag. The 3DS Server then issues a CReq.',
+      'ACS sets `transStatus = C` in the ARes and returns the challenge-start data needed for the 3DS Requestor Environment or 3DS SDK to continue challenge handling.',
     steps: [
       '3DS Requestor → 3DS Server → DS → ACS: AReq, as in the frictionless path.',
-      'ACS decision: `transStatus = C`, `acsChallengeMandated = Y` (or N if optional).',
-      '3DS Server returns the ARes to the 3DS Requestor. The 3DS Requestor builds a CReq (`challengeWindowSize` + echoed IDs) and POSTs it to `acsURL` via the challenge iframe.',
+      'ACS returns `ARes` with `transStatus = C` plus the challenge-start data (`acsURL`, identifiers, rendering hints, and related fields).',
+      'Browser challenge: the 3DS Server formats the `CReq` and the 3DS Requestor posts it through the browser to `acsURL`. App challenge: the 3DS SDK uses the ACS data to start SDK challenge handling and may exchange multiple `CReq` / `CRes` pairs.',
       'Cardholder interacts with the ACS challenge UI (OTP, password, biometric, OOB app).',
-      'ACS POSTs the final CRes back through the browser to the 3DS Requestor via `notificationURL`.',
-      '3DS Requestor POSTs the CRes to the 3DS Server. The 3DS Server validates, then POSTs the RReq to the DS → ACS to request the final authentication result.',
-      'ACS returns the RRes (`resultsStatus` + signed authentication data). 3DS Requestor proceeds with authorisation.',
+      'The challenge-side completion artifact is `CRes`: in the browser channel the ACS POSTs it to the requestor `notificationURL`, and in the app channel the SDK receives it from the ACS.',
+      'ACS sends the authoritative final result in `RReq` through the DS to the 3DS Server. The 3DS Server replies with `RRes` only to acknowledge receipt.',
+      'Merchant proceeds based on the authenticated result carried by the ARes / RReq branch and closes the browser or app UX accordingly; browser-visible `CRes` alone is not the issuer result.',
     ],
     whoInitiates: 'ACS — but the cardholder has to act before the protocol can continue.',
     typicalLatency: 'Seconds to minutes, depending on the challenge method and cardholder responsiveness.',
     cardholderExperience:
       'Cardholder sees the issuer challenge UI (OTP, password, OOB app prompt). The merchant page is paused behind the challenge iframe.',
     securityLens: [
-      'Browser challenge flow depends on the `cReq` `notificationURL` round-trip; cross-origin post-message integrity is in scope.',
-      'CRes integrity: tampering with the CRes on the way back to the 3DS Requestor is the classic "MITM on the browser leg" threat. Verify the signed ACS content path.',
-      'RReq / RRes is what carries the final authentication result and ECI to the 3DS Requestor; the merchant MUST key off the RRes, not the CRes.',
-      'For OOB / app-channel challenges, the OReq / ORes pair (introduced in v2.3.0) takes over from CReq / CRes for the cardholder interaction.',
+      'Browser challenge flow depends on the CReq form POST and final notification round-trip; app challenge depends on the SDK-to-ACS secure channel and correct SDK transaction binding.',
+      'CRes integrity matters because the browser leg is exposed to tampering on the way back to the 3DS Requestor. Verify the ACS-signed content path rather than trusting a browser-visible completion alone.',
+      'The final challenge result is carried by `RReq`; `RRes` only acknowledges receipt. The merchant / 3DS Requestor must not treat `RRes` or browser-visible CRes as the issuer result itself.',
+      'Once a transaction enters challenge, expect both the challenge leg (`CReq` / `CRes`) and the server-side results leg (`RReq` / `RRes`). A completed frictionless path has neither.',
+      'OOB and app-based challenges still use the challenge/result path (`CReq` / `CRes`, then `RReq` / `RRes`). `OReq` / `ORes` are separate operational messages and are not part of the authentication flow.',
     ],
     citations: [
       'EMV 3DS v2.3.1 Core Spec §3.1.2.5 (Browser challenge) and §4.2 (App challenge with split SDK).',
-      'EMV 3DS v2.3.1 Core Spec Table B.3 (CReq), B.4 / B.5 (CRes), B.8 (RReq), B.10 (OReq), B.11 (ORes).',
+      'EMV 3DS v2.3.1 Core Spec Table B.3 (CReq), B.4 / B.5 (CRes), B.8 (RReq), B.9 (RRes).',
     ],
   },
   {
@@ -97,7 +98,7 @@ const FLOWS: Flow[] = [
       '3DS Requestor assembles the AReq with `threeRIInd` and the appropriate sub-indicator (recurring, add-card, etc.).',
       '3DS Server forwards to the DS → ACS.',
       'ACS issues an ARes with a `transStatus` describing the outcome of the non-payment authentication.',
-      'No challenge; no CReq / CRes. The 3DS Server may issue an RReq to retrieve signed results when needed.',
+      'No challenge; no CReq / CRes. If the ACS later sends completion data, it does so in an `RReq` through the DS, and the 3DS Server answers with `RRes`.',
     ],
     whoInitiates: 'Merchant / 3DS Requestor.',
     typicalLatency: '< 1 second per round-trip; no human-in-the-loop.',
@@ -210,7 +211,16 @@ export function FlowsPage() {
 
         <footer className="lp-foot">
           <p>
-            Author: Wasif Faisal, BRAC University. All flow descriptions paraphrase the public EMV 3-D Secure Core
+            Protocol Modeling & Flow Architecture by{' '}
+            <a
+              href="https://www.linkedin.com/in/cswasif/"
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontWeight: 700, color: 'var(--accent-primary)', textDecoration: 'underline' }}
+            >
+              Wasif Faisal
+            </a>{' '}
+            (BRAC University). All flow descriptions paraphrase the public EMV 3-D Secure Core
             Spec; no normative prose is reproduced verbatim. For the interactive sequence diagram, see the{' '}
             <a href="/">lab canvas</a>.
           </p>

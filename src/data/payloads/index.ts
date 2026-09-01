@@ -249,7 +249,7 @@ export const PAYLOADS: Record<MessageType, Partial<Record<SupportedPayloadVersio
       builder: buildOReq_v231,
       fields: OReq_FIELDS,
       transport: 'detached-jws',
-      citation: 'EMV 3DS v2.3.1 Core Spec Table B.10 (added in v2.3.0, app channel).',
+      citation: 'EMV 3DS v2.3.1 Core Spec Table B.10 (operation-message sequence; not part of the authentication flow).',
     },
   },
   ORes: {
@@ -259,7 +259,7 @@ export const PAYLOADS: Record<MessageType, Partial<Record<SupportedPayloadVersio
       builder: buildORes_v231,
       fields: ORes_FIELDS,
       transport: 'detached-jws',
-      citation: 'EMV 3DS v2.3.1 Core Spec Table B.11 (added in v2.3.0, app channel).',
+      citation: 'EMV 3DS v2.3.1 Core Spec Table B.11 (operation-message acknowledgement; not part of the authentication flow).',
     },
   },
 };

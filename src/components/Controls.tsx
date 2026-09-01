@@ -1,4 +1,4 @@
-import React, { useState, memo } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
 import { 
   Play, 
   Pause, 
@@ -19,10 +19,13 @@ import {
   RefreshCw,
   Layers,
   AlertTriangle,
-  ShieldOff
+  ShieldOff,
+  Sliders,
+  Zap
 } from 'lucide-react';
 import type {
   Scenario,
+  DeviceChannel,
   MethodPath,
   DSRouting,
   TransStatus,
@@ -32,7 +35,7 @@ import type {
   ChallengePresentation,
   FlowStep
 } from '../types';
-import { PARTICIPANTS } from '../data/flowData';
+import { getParticipantsForScenario } from '../data/flowData';
 
 interface ControlsProps {
   scenario: Scenario;
@@ -62,6 +65,14 @@ export const Controls: React.FC<ControlsProps> = memo(({
   activeSteps,
 }) => {
   const [activeTab, setActiveTab] = useState<'timeline' | 'config'>('timeline');
+  const activeStepRef = useRef<HTMLButtonElement | null>(null);
+  const timelineContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (activeStepRef.current) {
+      activeStepRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [currentStepIndex, activeTab]);
   
   const handleMethodPathChange = (val: MethodPath) => {
     setScenario({
@@ -69,6 +80,18 @@ export const Controls: React.FC<ControlsProps> = memo(({
       methodPath: val,
     });
     setCurrentStepIndex(0); // Reset to Step 0 when scenario changes
+  };
+
+  const handleDeviceChannelChange = (val: DeviceChannel) => {
+    setScenario({
+      ...scenario,
+      deviceChannel: val,
+      challengeOutcome:
+        val === 'app' && scenario.challengeOutcome === 'error'
+          ? 'success'
+          : scenario.challengeOutcome,
+    });
+    setCurrentStepIndex(0);
   };
 
   const handleDSRoutingChange = (val: DSRouting) => {
@@ -89,6 +112,9 @@ export const Controls: React.FC<ControlsProps> = memo(({
 
   const handleChallengeOutcomeChange = (val: ChallengeOutcome) => {
     if (val === 'optout' && (scenario.challengeMandated === 'Y' || scenario.challengePreference === '04')) {
+      return;
+    }
+    if (val === 'error' && scenario.deviceChannel === 'app') {
       return;
     }
     setScenario({
@@ -193,13 +219,17 @@ export const Controls: React.FC<ControlsProps> = memo(({
         return {
           badge: 'C - Challenge',
           badgeClass: 'attempt',
-          desc: 'The ACS requires browser challenge. The 3DS Server will post a CReq through the browser and wait for the challenge result path.',
+          desc: scenario.deviceChannel === 'app'
+            ? 'The ACS requires app challenge. The requestor app will invoke the 3DS SDK and continue over the SDK/ACS challenge channel.'
+            : 'The ACS requires browser challenge. The 3DS Server will post a CReq through the browser and wait for the challenge result path.',
         };
       case 'D':
         return {
           badge: 'D - Decoupled',
           badgeClass: 'warning',
-          desc: 'The issuer will continue authentication asynchronously outside the browser interaction.',
+          desc: scenario.deviceChannel === 'app'
+            ? 'The issuer will continue authentication asynchronously outside the in-app interaction.'
+            : 'The issuer will continue authentication asynchronously outside the browser interaction.',
         };
       case 'I':
         return {
@@ -224,111 +254,208 @@ export const Controls: React.FC<ControlsProps> = memo(({
 
   const statusInfo = getScenarioStatus();
   const canOptOut = scenario.challengeMandated === 'N' && scenario.challengePreference !== '04';
+  const scenarioParticipants = getParticipantsForScenario(scenario);
+  const isAppChannel = scenario.deviceChannel === 'app';
+  const canUseBrowserChallengeError = !isAppChannel;
 
   return (
-    <div className="controls-panel" style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%', overflow: 'hidden' }}>
+    <div className="controls-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', minHeight: 0, overflow: 'hidden' }}>
       
-      {/* Sidebar Tabs */}
-      <div className="sidebar-tabs">
+      {/* Sidebar Tabs (Pinned at top) */}
+      <div className="sidebar-tabs" style={{ flexShrink: 0, margin: '0 0 4px 0' }}>
         <button
           onClick={() => setActiveTab('timeline')}
           className={`sidebar-tab-btn ${activeTab === 'timeline' ? 'active' : ''}`}
+          title="Interactive Step-by-Step Protocol Walkthrough"
         >
-          <Compass size={14} />
-          <span>Protocol Walkthrough</span>
+          <Compass size={13} />
+          <span>Walkthrough</span>
         </button>
         <button
           onClick={() => setActiveTab('config')}
           className={`sidebar-tab-btn ${activeTab === 'config' ? 'active' : ''}`}
+          title="Scenario Outcome and Protocol Settings"
         >
-          <Layers size={14} />
-          <span>Scenario Config</span>
+          <Sliders size={13} />
+          <span>Parameters</span>
         </button>
       </div>
 
       {activeTab === 'timeline' && (
-        <div className="control-group timeline-group fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '14px', gap: '10px' }}>
+        <div className="timeline-view-wrapper fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', gap: '10px' }}>
           
-          {/* Combined Compact Playback Bar */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* Executive Playback Deck */}
+          <div className="playback-deck" style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            background: 'var(--bg-secondary)',
+            padding: '10px 12px',
+            borderRadius: '10px',
+            border: '1px solid var(--border-color)',
+            boxShadow: 'var(--shadow-sm)',
+            flexShrink: 0
+          }}>
+            {/* Row 1: Step counters and active badge */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                Step <strong style={{ color: 'var(--text-primary)', fontSize: '12px' }}>{currentStepIndex + 1}</strong> of {totalSteps}
+              </div>
+              <span className="active-step-badge" style={{
+                fontSize: '9.5px',
+                fontWeight: 800,
+                padding: '2px 7px',
+                borderRadius: '4px',
+                background: 'rgba(99, 102, 241, 0.15)',
+                color: '#818cf8',
+                border: '1px solid rgba(99, 102, 241, 0.35)',
+                letterSpacing: '0.04em'
+              }}>
+                STEP {activeStepNum}
+              </span>
+            </div>
+
+            {/* Row 2: Scrubbing Progress Track */}
+            <div
+              className="progress-container"
+              style={{ height: '6px', borderRadius: '4px', cursor: 'pointer', background: 'var(--bg-tertiary)', margin: '1px 0' }}
+              title="Click or scrub to jump to step"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+                const targetIndex = Math.floor(percentage * totalSteps);
+                setCurrentStepIndex(Math.max(0, Math.min(totalSteps - 1, targetIndex)));
+              }}
+            >
+              <div 
+                className="progress-bar" 
+                style={{
+                  width: `${((currentStepIndex + 1) / totalSteps) * 100}%`,
+                  borderRadius: '4px',
+                  background: 'linear-gradient(90deg, #6366f1, #38bdf8)'
+                }}
+              />
+            </div>
+
+            {/* Row 3: Action Buttons and Speed Picker */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', paddingTop: '2px' }}>
+              {/* Media Controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <button 
                   onClick={handleReset} 
                   className="player-btn" 
-                  title="Reset to Step 1"
+                  title="Reset to first step (R)"
                   disabled={currentStepIndex === 0}
                   style={{ width: '28px', height: '28px', padding: 0 }}
                 >
-                  <RotateCcw size={13} />
+                  <RotateCcw size={12} />
                 </button>
                 <button 
                   onClick={handlePrev} 
                   className="player-btn" 
-                  title="Previous Step"
+                  title="Previous step (Left Arrow)"
                   disabled={currentStepIndex === 0}
                   style={{ width: '28px', height: '28px', padding: 0 }}
                 >
-                  <ChevronLeft size={15} />
+                  <ChevronLeft size={14} />
                 </button>
                 <button 
                   onClick={togglePlay} 
                   className={`player-btn play-pause-btn ${isPlaying ? 'playing' : ''}`}
-                  title={isPlaying ? 'Pause Autoplay' : 'Start Autoplay'}
-                  style={{ width: '32px', height: '32px', padding: 0 }}
+                  title={isPlaying ? 'Pause autoplay (Space)' : 'Start autoplay (Space)'}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    padding: 0,
+                    background: isPlaying ? '#ef4444' : 'var(--accent-primary)',
+                    color: '#ffffff',
+                    border: 'none'
+                  }}
                 >
-                  {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" style={{ marginLeft: '1px' }} />}
+                  {isPlaying ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" style={{ marginLeft: '1px' }} />}
                 </button>
                 <button 
                   onClick={handleNext} 
                   className="player-btn" 
-                  title="Next Step"
+                  title="Next step (Right Arrow)"
                   disabled={currentStepIndex === totalSteps - 1}
                   style={{ width: '28px', height: '28px', padding: 0 }}
                 >
-                  <ChevronRight size={15} />
+                  <ChevronRight size={14} />
                 </button>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Speed:</span>
-                <input 
-                  type="range" 
-                  min="1500" 
-                  max="5000" 
-                  step="500"
-                  value={playSpeed} 
-                  onChange={(e) => setPlaySpeed(Number(e.target.value))}
-                  className="speed-slider"
-                  style={{ width: '48px', height: '3px', margin: 0 }}
-                />
-                <span className="speed-val" style={{ fontSize: '10px', fontWeight: 600 }}>{(playSpeed / 1000).toFixed(1)}s</span>
-              </div>
-            </div>
-
-            {/* Clickable Progress Bar */}
-            <div className="progress-container" style={{ height: '4px', margin: '2px 0 4px 0' }} onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const clickX = e.clientX - rect.left;
-              const percentage = clickX / rect.width;
-              const targetIndex = Math.floor(percentage * totalSteps);
-              setCurrentStepIndex(Math.max(0, Math.min(totalSteps - 1, targetIndex)));
-            }}>
-              <div 
-                className="progress-bar" 
-                style={{ width: `${((currentStepIndex + 1) / totalSteps) * 100}%` }}
-              />
-            </div>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '10.5px', color: 'var(--text-muted)', fontWeight: 600 }}>
-              <span>Step {currentStepIndex + 1} of {totalSteps}</span>
-              <span className="active-step-badge" style={{ fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Step {activeStepNum}</span>
+              {/* Speed cycling toggle pill — clean, never overflows! */}
+              <button
+                type="button"
+                onClick={() => {
+                  const speeds = [800, 1500, 2500, 4000];
+                  const nextIdx = (speeds.indexOf(playSpeed) + 1) % speeds.length;
+                  setPlaySpeed(speeds[nextIdx]);
+                }}
+                className="speed-cycle-pill"
+                title="Click to cycle autoplay delay (0.8s, 1.5s, 2.5s, 4.0s)"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '4px 8px',
+                  borderRadius: '16px',
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-color)',
+                  fontSize: '10.5px',
+                  fontWeight: 700,
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer'
+                }}
+              >
+                <Zap size={10} style={{ color: '#f59e0b' }} />
+                <span>{(playSpeed / 1000).toFixed(1)}s</span>
+              </button>
             </div>
           </div>
 
-          {/* Timeline Steps Checklist */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderTop: '1px solid var(--border-color)', paddingTop: '10px', marginTop: '4px' }}>
-            <div className="timeline-container" style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
+          {/* Timeline Steps Checklist with auto-scroll */}
+          <div className="timeline-wrapper" style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            overflow: 'hidden',
+            background: 'var(--bg-secondary)',
+            borderRadius: '10px',
+            border: '1px solid var(--border-color)',
+            padding: '8px'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '2px 4px 6px 4px',
+              borderBottom: '1px solid var(--border-color)',
+              marginBottom: '6px'
+            }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Protocol Execution Path
+              </span>
+              <span style={{ fontSize: '9.5px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono' }}>
+                {activeSteps.length} steps
+              </span>
+            </div>
+
+            <div
+              ref={timelineContainerRef}
+              className="timeline-container"
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                paddingRight: '4px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '3px'
+              }}
+            >
               {activeSteps.map((step, idx) => {
                 const isPast = idx < currentStepIndex;
                 const isCurrent = idx === currentStepIndex;
@@ -337,38 +464,82 @@ export const Controls: React.FC<ControlsProps> = memo(({
                 if (isPast) statusClass = 'past';
                 if (isCurrent) statusClass = 'current';
 
-                const sourcePart = PARTICIPANTS.find(p => p.id === step.source);
+                const sourcePart = scenarioParticipants.find(p => p.id === step.source);
+                const targetPart = scenarioParticipants.find(p => p.id === step.target);
                 const strokeColor = sourcePart ? sourcePart.stroke : '#6366f1';
                 const isMessage = !!step.target;
 
                 return (
                   <button
                     key={step.id}
+                    ref={isCurrent ? activeStepRef : null}
                     onClick={() => {
                       setIsPlaying(false);
                       setCurrentStepIndex(idx);
                     }}
                     className={`timeline-step ${statusClass}`}
-                    style={{ position: 'relative', padding: '6px 10px', minHeight: '32px' }}
+                    style={{
+                      position: 'relative',
+                      padding: '7px 9px',
+                      minHeight: '36px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      borderLeft: isCurrent ? `3px solid ${strokeColor}` : '3px solid transparent',
+                      background: isCurrent ? 'var(--bg-tertiary)' : 'transparent',
+                      borderTop: '1px solid transparent',
+                      borderRight: '1px solid transparent',
+                      borderBottom: '1px solid transparent',
+                      borderColor: isCurrent ? 'var(--border-color)' : 'transparent',
+                      transition: 'all 0.15s ease',
+                      borderRadius: '6px',
+                      width: '100%'
+                    }}
                     aria-current={isCurrent ? 'step' : undefined}
                   >
                     <span 
                       className={`timeline-dot ${statusClass}`}
                       style={
                         isCurrent 
-                          ? { background: strokeColor, boxShadow: `0 0 10px ${strokeColor}` }
-                          : { background: isPast ? '#10b981' : 'var(--text-muted)' }
+                          ? { background: strokeColor, boxShadow: `0 0 8px ${strokeColor}` }
+                          : { background: isPast ? '#10b981' : 'var(--border-color)' }
                       }
                     />
-                    <span className="timeline-num" style={{ color: strokeColor, fontWeight: '700', fontSize: '10.5px', minWidth: '22px' }}>
+                    <span className="timeline-num" style={{
+                      color: isCurrent ? strokeColor : 'var(--text-secondary)',
+                      fontWeight: '800',
+                      fontSize: '10.5px',
+                      minWidth: '22px',
+                      fontFamily: 'JetBrains Mono, monospace'
+                    }}>
                       {step.num}
                     </span>
-                    <span className="timeline-text" title={step.label} style={{ fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
-                      {step.label}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', textAlign: 'left', minWidth: 0 }}>
+                      <span className="timeline-text" title={step.label} style={{
+                        fontSize: '11px',
+                        fontWeight: isCurrent ? 700 : 500,
+                        color: isCurrent ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {step.label}
+                      </span>
+                      <span style={{
+                        fontSize: '9px',
+                        color: isCurrent ? strokeColor : 'var(--text-muted)',
+                        fontWeight: 600,
+                        marginTop: '1px',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {isMessage ? `${sourcePart?.name || step.source} → ${targetPart?.name || step.target}` : `${sourcePart?.name || step.source} (Internal)`}
+                      </span>
+                    </div>
                     {isCurrent && (
-                      <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', color: strokeColor }}>
-                        {isMessage ? <ArrowRight size={10} className="fade-in" /> : <RefreshCw size={9} className="fade-in" style={{ animation: 'spin 4s linear infinite' }} />}
+                      <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', color: strokeColor, flexShrink: 0 }}>
+                        {isMessage ? <ArrowRight size={12} className="fade-in" /> : <RefreshCw size={10} className="fade-in" style={{ animation: 'spin 4s linear infinite' }} />}
                       </span>
                     )}
                   </button>
@@ -380,9 +551,20 @@ export const Controls: React.FC<ControlsProps> = memo(({
       )}
 
       {activeTab === 'config' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto', paddingRight: '4px' }} className="fade-in">
+        <div
+          className="controls-config-scroll fade-in"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            padding: '4px 4px 16px 2px',
+          }}
+        >
           {/* Dynamic Scenario Status Card */}
-          <div className="scenario-status-card fade-in" style={{ padding: '14px', gap: '8px' }}>
+          <div className="scenario-status-card fade-in" style={{ padding: '14px', gap: '8px', margin: 0, flexShrink: 0 }}>
             <div className="scenario-status-header">
               <span className="scenario-status-title">
                 <Layers size={13} style={{ color: '#6366f1' }} />
@@ -428,6 +610,11 @@ export const Controls: React.FC<ControlsProps> = memo(({
                   }
                 };
                 const pills: Array<{ label: string; tone: 'neutral' | 'success' | 'warn' | 'danger' | 'info' | 'accent'; stepPrefix?: string }> = [];
+                const challengeStartStep = scenario.deviceChannel === 'app' ? '11c' : '11a';
+                const challengeStartLabel = scenario.deviceChannel === 'app' ? '11c SDK' : '11a CReq';
+                const challengeUiLabel = scenario.deviceChannel === 'app'
+                  ? (scenario.challengePresentation === 'oob' ? '12c-14b SDK OOB' : '12c-14 SDK')
+                  : (scenario.challengePresentation === 'oob' ? '12b-14b OOB' : '12-14');
                 // Phase 1: 3DS Method
                 pills.push({ label: scenario.methodPath === 'reused' ? 'Method 3a' : scenario.methodPath === 'executed' ? 'Method 3b-4' : scenario.methodPath === 'unavailable' ? 'Method NX' : 'Method TO', tone: scenario.methodPath === 'timeout' ? 'warn' : 'neutral', stepPrefix: '3' });
                 // Phase 2: AReq/ARes
@@ -438,7 +625,7 @@ export const Controls: React.FC<ControlsProps> = memo(({
                 // Phase 4: transStatus branch
                 switch (scenario.transStatus) {
                   case 'Y': pills.push({ label: 'Y', tone: 'success' }); pills.push({ label: '22a Auth', tone: 'success', stepPrefix: '22a' }); break;
-                  case 'A': pills.push({ label: 'A', tone: 'success' }); pills.push({ label: '22a Auth', tone: 'success', stepPrefix: '22a' }); break;
+                  case 'A': pills.push({ label: 'A', tone: 'success' }); pills.push({ label: '22a Attempts', tone: 'success', stepPrefix: '22a' }); break;
                   case 'N': pills.push({ label: 'N', tone: 'danger' }); pills.push({ label: '22b Decline', tone: 'danger', stepPrefix: '22b' }); break;
                   case 'U': pills.push({ label: 'U', tone: 'warn' }); pills.push({ label: '22b Decline', tone: 'danger', stepPrefix: '22b' }); break;
                   case 'R': pills.push({ label: 'R', tone: 'danger' }); pills.push({ label: '22b Decline', tone: 'danger', stepPrefix: '22b' }); break;
@@ -452,28 +639,28 @@ export const Controls: React.FC<ControlsProps> = memo(({
                       pills.push({ label: '22e Non-3DS', tone: 'warn', stepPrefix: '22e' });
                     } else if (scenario.challengeOutcome === 'error') {
                       pills.push({ label: 'C', tone: 'accent' });
-                      pills.push({ label: '11a CReq', tone: 'accent', stepPrefix: '11a' });
+                      pills.push({ label: challengeStartLabel, tone: 'accent', stepPrefix: challengeStartStep });
                       pills.push({ label: '12 Challenge', tone: 'accent', stepPrefix: '12' });
                       pills.push({ label: '21_err', tone: 'danger', stepPrefix: '21_err' });
                       pills.push({ label: '22b Decline', tone: 'danger', stepPrefix: '22b' });
                     } else if (scenario.challengeOutcome === 'invalid_cres') {
                       pills.push({ label: 'C', tone: 'accent' });
-                      pills.push({ label: '11a CReq', tone: 'accent', stepPrefix: '11a' });
-                      pills.push({ label: '12 Challenge', tone: 'accent', stepPrefix: '12' });
+                      pills.push({ label: challengeStartLabel, tone: 'accent', stepPrefix: challengeStartStep });
+                      pills.push({ label: scenario.deviceChannel === 'app' ? '12c SDK' : '12 Challenge', tone: 'accent', stepPrefix: '12' });
                       pills.push({ label: '21_close', tone: 'warn', stepPrefix: '21' });
                       pills.push({ label: '22 Invalid', tone: 'warn', stepPrefix: '22' });
                     } else if (scenario.challengeOutcome === 'decoupled') {
                       pills.push({ label: 'C', tone: 'accent' });
-                      pills.push({ label: '11a CReq', tone: 'accent', stepPrefix: '11a' });
-                      pills.push({ label: scenario.challengePresentation === 'oob' ? '12b OOB' : '12 Challenge', tone: 'accent', stepPrefix: '12' });
+                      pills.push({ label: challengeStartLabel, tone: 'accent', stepPrefix: challengeStartStep });
+                      pills.push({ label: scenario.deviceChannel === 'app' ? '12c SDK' : (scenario.challengePresentation === 'oob' ? '12b OOB' : '12 Challenge'), tone: 'accent', stepPrefix: '12' });
                       pills.push({ label: '16d RReq', tone: 'info', stepPrefix: '16d' });
                       pills.push({ label: '17-20', tone: 'info', stepPrefix: '17' });
                       pills.push({ label: '22c Pending', tone: 'info', stepPrefix: '22c' });
                     } else {
                       // success / failure / cancelled
                       pills.push({ label: 'C', tone: 'accent' });
-                      pills.push({ label: '11a CReq', tone: 'accent', stepPrefix: '11a' });
-                      pills.push({ label: scenario.challengePresentation === 'oob' ? '12b-14b OOB' : '12-14', tone: 'accent', stepPrefix: '12' });
+                      pills.push({ label: challengeStartLabel, tone: 'accent', stepPrefix: challengeStartStep });
+                      pills.push({ label: challengeUiLabel, tone: 'accent', stepPrefix: '12' });
                       if (scenario.repeatChallenge) pills.push({ label: '15b Retry', tone: 'warn', stepPrefix: '15b' });
                       pills.push({ label: '15', tone: 'accent', stepPrefix: '15' });
                       pills.push({ label: '16a/b RReq', tone: scenario.challengeOutcome === 'success' ? 'success' : 'danger', stepPrefix: '16' });
@@ -515,6 +702,41 @@ export const Controls: React.FC<ControlsProps> = memo(({
           </div>
 
           {/* Interactive Scenario Controls */}
+          <div className="control-group" style={{ padding: '14px', gap: '10px' }}>
+            <h3 className="group-title" style={{ paddingBottom: '8px', marginBottom: '2px' }}>
+              <Layers size={14} className="title-icon" />
+              Device Channel
+            </h3>
+
+            <div className="field-container">
+              <div className="segmented-control">
+                <button
+                  onClick={() => handleDeviceChannelChange('browser')}
+                  className={`segment-btn ${scenario.deviceChannel === 'browser' ? 'selected' : ''}`}
+                  style={{ padding: '6px 4px' }}
+                  title="deviceChannel = 02 (Browser)"
+                >
+                  <span className="segment-title" style={{ fontSize: '10.5px' }}>Browser</span>
+                  <span className="segment-desc" style={{ fontSize: '8px' }}>02 / BRW</span>
+                </button>
+                <button
+                  onClick={() => handleDeviceChannelChange('app')}
+                  className={`segment-btn ${scenario.deviceChannel === 'app' ? 'selected' : ''}`}
+                  style={{ padding: '6px 4px' }}
+                  title="deviceChannel = 01 (App / SDK)"
+                >
+                  <span className="segment-title" style={{ fontSize: '10.5px' }}>App / SDK</span>
+                  <span className="segment-desc" style={{ fontSize: '8px' }}>01 / SDK</span>
+                </button>
+              </div>
+              <div className="status-caption" style={{ fontSize: '10.5px', marginTop: '4px' }}>
+                {scenario.deviceChannel === 'app'
+                  ? <>The simulator is rendering the SDK-driven challenge path for <code>deviceChannel = 01</code>. Browser-only constructs such as the iframe CReq form POST and notificationURL error callback are hidden in this mode.</>
+                  : <>The simulator is rendering the browser challenge path for <code>deviceChannel = 02</code>, including the CReq form POST, iframe challenge surface, and browser callback to <code>notificationURL</code>.</>}
+              </div>
+            </div>
+          </div>
+
           <div className="control-group" style={{ padding: '14px', gap: '10px' }}>
             <h3 className="group-title" style={{ paddingBottom: '8px', marginBottom: '2px' }}>
               <Activity size={14} className="title-icon" />
@@ -636,7 +858,11 @@ export const Controls: React.FC<ControlsProps> = memo(({
                   {scenario.transStatus === 'N' && 'N: Not authenticated. Transaction failed validation.'}
                   {scenario.transStatus === 'U' && 'U: Technical error/unavailable. Issuer unable to complete.'}
                   {scenario.transStatus === 'R' && 'R: Authentication rejected. Authorisation must not be attempted.'}
-                  {scenario.transStatus === 'C' && 'C: Challenge required. Browser CReq/CRes and RReq/RRes path will execute.'}
+                  {scenario.transStatus === 'C' && (
+                    scenario.deviceChannel === 'app'
+                      ? 'C: Challenge required. The requestor app invokes the 3DS SDK, the ACS returns the final challenge result over the SDK channel, and the server-side RReq/RRes exchange closes the loop.'
+                      : 'C: Challenge required. Browser CReq/CRes and RReq/RRes path will execute.'
+                  )}
                   {scenario.transStatus === 'D' && 'D: Decoupled Authentication. ACS will authenticate out-of-band. 3DS Server waits for RReq per [Req 347].'}
                   {scenario.transStatus === 'I' && 'I: Information only. ACS acknowledges but does not authenticate. Common in 3RI / data-only flows. No liability shift.'}
                   {scenario.transStatus === 'S' && 'S: Secure Payment Confirmation (SPC). 2.3.0+ flow. ACS issues a WebAuthn challenge. Merchant-side Step 10b SPA continues checkout using an SPC authentication value.'}
@@ -711,11 +937,12 @@ export const Controls: React.FC<ControlsProps> = memo(({
                     onClick={() => handleChallengeOutcomeChange('error')}
                     className={`segment-btn ${scenario.challengeOutcome === 'error' ? 'selected' : ''}`}
                     style={{ padding: '6px 4px' }}
-                    title="ACS posts an Error Message through the browser to notificationURL per §3.3 Step 21"
+                    title={canUseBrowserChallengeError ? 'ACS posts an Error Message through the browser to notificationURL per §3.3 Step 21' : 'Browser-only error transport; app challenge does not return this path through notificationURL'}
+                    disabled={!canUseBrowserChallengeError}
                   >
                     <AlertTriangle size={11} className="segment-icon" />
                     <span className="segment-title" style={{ fontSize: '10.5px' }}>! Error</span>
-                    <span className="segment-desc" style={{ fontSize: '8px' }}>Err to URL</span>
+                    <span className="segment-desc" style={{ fontSize: '8px' }}>{canUseBrowserChallengeError ? 'Err to URL' : 'Browser only'}</span>
                   </button>
                   <button
                     onClick={() => handleChallengeOutcomeChange('invalid_cres')}
@@ -731,13 +958,23 @@ export const Controls: React.FC<ControlsProps> = memo(({
               </div>
 
               <div className="status-caption" style={{ fontSize: '10.5px' }}>
-                {scenario.challengeOutcome === 'success' && 'Successful browser challenge. ACS emits RReq Y and posts final CRes Y.'}
-                {scenario.challengeOutcome === 'failure' && 'Challenge proof failed. ACS emits RReq N and the merchant resumes in a failed state.'}
-                {scenario.challengeOutcome === 'cancelled' && 'Cardholder abandoned or cancelled the challenge. ACS sets a Challenge Cancelation Indicator in the RReq.'}
-                {scenario.challengeOutcome === 'decoupled' && 'Issuer pivots the browser challenge into decoupled fallback. Merchant closes the iframe and shows a pending state.'}
+                {scenario.challengeOutcome === 'success' && (scenario.deviceChannel === 'app'
+                  ? 'Successful app challenge. ACS emits RReq Y, returns the final CRes through the SDK channel, and the requestor app resumes checkout.'
+                  : 'Successful browser challenge. ACS emits RReq Y and posts final CRes Y.')}
+                {scenario.challengeOutcome === 'failure' && (scenario.deviceChannel === 'app'
+                  ? 'Challenge proof failed. ACS emits RReq N, the SDK returns the negative completion to the requestor app, and checkout resumes in a failed state.'
+                  : 'Challenge proof failed. ACS emits RReq N and the merchant resumes in a failed state.')}
+                {scenario.challengeOutcome === 'cancelled' && (scenario.deviceChannel === 'app'
+                  ? 'Cardholder abandoned or cancelled the app challenge. ACS sets a Challenge Cancelation Indicator in the RReq and the SDK tears down the challenge surface.'
+                  : 'Cardholder abandoned or cancelled the challenge. ACS sets a Challenge Cancelation Indicator in the RReq.')}
+                {scenario.challengeOutcome === 'decoupled' && (scenario.deviceChannel === 'app'
+                  ? 'Issuer pivots the app challenge into decoupled fallback. The SDK closes the challenge surface and the requestor app shows a pending state.'
+                  : 'Issuer pivots the browser challenge into decoupled fallback. Merchant closes the iframe and shows a pending state.')}
                 {scenario.challengeOutcome === 'optout' && '3DS Server / 3DS Requestor evaluated the C challenge and decided not to perform it. This path is only valid when the ACS did not mandate the challenge and the 3DS Requestor did not mandate it itself. 3DS Server returns RRes with resultsStatus = 02 (CReq not sent to ACS); checkout resumes per [Req 117].a.'}
                 {scenario.challengeOutcome === 'error' && 'ACS posts an Error Message (errorCode/errorComponent) to the merchant notificationURL. Server-side RReq/RRes still close the loop.'}
-                {scenario.challengeOutcome === 'invalid_cres' && '3DS Requestor fails to validate the final CRes (e.g. messageVersion mismatch, bad base64url payload, missing fields, or mismatched transaction IDs). Per Step 22, the requestor must detect this and end 3DS processing.'}
+                {scenario.challengeOutcome === 'invalid_cres' && (scenario.deviceChannel === 'app'
+                  ? 'The requestor app fails to validate the final SDK-delivered CRes or completion payload (e.g. mismatched transaction IDs or missing fields). Per Step 22, it must end 3DS processing.'
+                  : '3DS Requestor fails to validate the final CRes (e.g. messageVersion mismatch, bad base64url payload, missing fields, or mismatched transaction IDs). Per Step 22, the requestor must detect this and end 3DS processing.')}
               </div>
 
               <div className="field-container" style={{ marginTop: '6px' }}>
@@ -783,7 +1020,7 @@ export const Controls: React.FC<ControlsProps> = memo(({
                   </button>
                 </div>
                 <div className="status-caption" style={{ fontSize: '10.5px', marginTop: '4px' }}>
-                  <code>threeDSRequestorChallengeInd</code> influences whether the 3DS Server should honor or skip the challenge. Values shown here are the high-signal browser cases for researchers: no preference, no challenge, challenge requested, and challenge mandated.
+                  <code>threeDSRequestorChallengeInd</code> influences whether the 3DS Server should honor or skip the challenge. Values shown here are the high-signal challenge cases for researchers: no preference, no challenge, challenge requested, and challenge mandated.
                 </div>
               </div>
 
@@ -819,23 +1056,25 @@ export const Controls: React.FC<ControlsProps> = memo(({
                     onClick={() => handleChallengePresentationChange('html')}
                     className={`segment-btn ${scenario.challengePresentation === 'html' ? 'selected' : ''}`}
                     style={{ padding: '6px 4px' }}
-                    title="Standard browser HTML challenge"
+                    title={isAppChannel ? 'SDK-rendered challenge UI' : 'Standard browser HTML challenge'}
                   >
                     <span className="segment-title" style={{ fontSize: '10.5px' }}>HTML</span>
-                    <span className="segment-desc" style={{ fontSize: '8px' }}>Iframe UI</span>
+                    <span className="segment-desc" style={{ fontSize: '8px' }}>{isAppChannel ? 'SDK UI' : 'Iframe UI'}</span>
                   </button>
                   <button
                     onClick={() => handleChallengePresentationChange('oob')}
                     className={`segment-btn ${scenario.challengePresentation === 'oob' ? 'selected' : ''}`}
                     style={{ padding: '6px 4px' }}
-                    title="Browser OOB challenge: iframe shows instructions, authentication happens out-of-band"
+                    title={isAppChannel ? 'App OOB challenge: SDK shows issuer instructions while approval happens out-of-band' : 'Browser OOB challenge: iframe shows instructions, authentication happens out-of-band'}
                   >
                     <span className="segment-title" style={{ fontSize: '10.5px' }}>OOB</span>
                     <span className="segment-desc" style={{ fontSize: '8px' }}>Instructions</span>
                   </button>
                 </div>
                 <div className="status-caption" style={{ fontSize: '10.5px', marginTop: '4px' }}>
-                  Browser OOB uses the same overall browser challenge flow, but the ACS iframe shows instructions while the actual authentication happens in an issuer-controlled out-of-band channel.
+                  {isAppChannel
+                    ? 'App OOB keeps the challenge state machine inside the SDK lane, but the issuer-directed approval itself happens in a separate out-of-band channel.'
+                    : 'Browser OOB uses the same overall browser challenge flow, but the ACS iframe shows instructions while the actual authentication happens in an issuer-controlled out-of-band channel.'}
                 </div>
               </div>
 

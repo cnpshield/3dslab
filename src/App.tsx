@@ -11,26 +11,31 @@ import {
 } from '@xyflow/react';
 import type { Edge, Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Sun, Moon, Terminal, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, BookOpen, Eye, EyeOff, Crosshair, Link2, Sparkles, List, Download, Upload, Info, FileWarning } from 'lucide-react';
+import { Sun, Moon, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, BookOpen, Eye, EyeOff, Crosshair, Link2, ShieldCheck, List, Download, Upload, Info, FileWarning, Layers, Compass } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 import { useHashRoute, navigateToRoute, type RouteId } from './routes';
 import { Seo } from './components/Seo';
+import { TourGuide } from './components/TourGuide';
+import { BrandMark } from './components/BrandMark';
 import './App.css';
 import './landing-pages.css';
 
 import type { Scenario, FlowStep, StepGroupId, ParticipantId, ProtocolVersion } from './types';
-import { PARTICIPANTS, FLOW_STEPS, STEP_GROUPS } from './data/flowData';
+import { FLOW_STEPS, STEP_GROUPS, getParticipantsForScenario } from './data/flowData';
 import { ParticipantHeaderNode, LifelineAnchorNode, LifelineBottomNode, InternalStepNode, DomainGroupNode, StepGroupBandNode, SwimlaneColumnNode, StepNumberRailNode, BranchFrameNode } from './components/CustomNode';
 import { CustomMessageEdge } from './components/CustomEdge';
 import { BranchMap } from './components/BranchMap';
 import { Controls } from './components/Controls';
 import { DetailsPanel } from './components/DetailsPanel';
 import type { DetailsContext } from './components/DetailsPanel';
-import { flowStore, flowActions, DEFAULT_SCENARIO } from './stores/flowStore';
+import { flowStore, flowActions } from './stores/flowStore';
 import { uiStore, uiActions } from './stores/uiStore';
 import { EMVCO_DEVICE_FIELDS } from './data/emvcoFingerprint';
 import { serializeSnapshot, parseSnapshot, downloadSnapshot } from './utils/snapshot';
 import { PROTOCOL_VERSIONS, getDynamicPayload } from './utils/protocolViz';
+import { getTransStatusReasonLabel } from './utils/transStatus';
+import { executeGraphQL } from './graphql/client';
+import { SCENARIO_PRESETS, type ScenarioPreset } from './data/scenarioPresets';
 
 /**
  * Re-exported from DetailsPanel for use in onNodeClick handlers.
@@ -69,23 +74,13 @@ const X_COORDS = {
 // X coordinate for the step-number rail (left margin of the diagram).
 const STEP_RAIL_X = -50;
 
-// Soft cap on the share-URL state payload. 4 KB is comfortably below
-// every browser's URL limit (Chrome ~32 KB, Safari ~80 KB) while still
-// leaving room for the rest of the query string. Beyond this we drop
-// the per-step position from the URL and warn the user.
-const SHARE_URL_BUDGET_BYTES = 4 * 1024;
-const PROJECT_AUTHOR_LABEL = 'Wasif Faisal, BRAC University';
+const PROJECT_AUTHOR_NAME = 'Wasif Faisal';
+const PROJECT_AUTHOR_AFFILIATION = 'BRAC University';
+const PROJECT_AUTHOR_ROLE = 'Lead Researcher & Protocol Architect';
 const PROJECT_REPO_URL = 'https://github.com/cnpshield/3dslab';
 const PROJECT_REPO_LABEL = 'cnpshield/3dslab';
 const PROJECT_LINKEDIN_URL = 'https://www.linkedin.com/in/cswasif/';
 const PROJECT_LINKEDIN_LABEL = 'linkedin.com/in/cswasif';
-
-type ScenarioPreset = {
-  id: string;
-  label: string;
-  summary: string;
-  scenario: Scenario;
-};
 
 type SharedAppState = {
   scenario?: Partial<Scenario>;
@@ -98,67 +93,6 @@ type SharedAppState = {
   scenarioToolbarCollapsed?: boolean;
   showListView?: boolean;
 };
-
-function BrandMark({ size = 18, className }: { size?: number; className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M12 2.75 18.5 6.5 12 10.25 5.5 6.5 12 2.75Z"
-        fill="currentColor"
-        fillOpacity="0.22"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M5.5 6.5V14L12 21.25V10.25L5.5 6.5Z"
-        fill="currentColor"
-        fillOpacity="0.14"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M18.5 6.5V14L12 21.25V10.25L18.5 6.5Z"
-        fill="currentColor"
-        fillOpacity="0.08"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M9.4 13.2h2.05c1.05 0 1.78.63 1.78 1.55 0 .95-.73 1.6-1.78 1.6H9.4v-3.15Zm1.89-2.2c1.02 0 1.7-.59 1.7-1.46s-.68-1.44-1.7-1.44H9.4V11h1.89Z"
-        fill="currentColor"
-      />
-      <path
-        d="M14.9 8.1h1.1c1.68 0 2.8 1.04 2.8 2.61 0 1.59-1.12 2.64-2.8 2.64h-1.1"
-        stroke="currentColor"
-        strokeWidth="1.35"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-const SCENARIO_PRESETS: ScenarioPreset[] = [
-  { id: 'frictionless_y', label: 'Frictionless Y', summary: 'Approval without a visible challenge.', scenario: { ...DEFAULT_SCENARIO, transStatus: 'Y' } },
-  { id: 'attempts_a', label: 'Attempts A', summary: 'Attempts flow when full auth is not completed.', scenario: { ...DEFAULT_SCENARIO, transStatus: 'A', methodPath: 'reused' } },
-  { id: 'challenge_success', label: 'Challenge Success', summary: 'Interactive challenge that returns success.', scenario: { ...DEFAULT_SCENARIO, transStatus: 'C', challengeOutcome: 'success', challengeMandated: 'Y' } },
-  { id: 'challenge_failure', label: 'Challenge Failure', summary: 'Challenge completed but authentication fails.', scenario: { ...DEFAULT_SCENARIO, transStatus: 'C', challengeOutcome: 'failure', challengeMandated: 'Y' } },
-  { id: 'decoupled_d', label: 'Decoupled D', summary: 'ACS defers completion into decoupled authentication.', scenario: { ...DEFAULT_SCENARIO, transStatus: 'D', challengeOutcome: 'decoupled', challengePresentation: 'oob' } },
-  { id: 'opt_out', label: 'Opt-out', summary: 'Requestor opt-out path with resultsStatus 02.', scenario: { ...DEFAULT_SCENARIO, transStatus: 'C', challengeOutcome: 'optout', challengePreference: '02', challengeMandated: 'Y' } },
-  { id: 'info_only', label: 'Info Only', summary: 'Information-only processing path.', scenario: { ...DEFAULT_SCENARIO, transStatus: 'I', methodPath: 'unavailable' } },
-  { id: 'spc_s', label: 'SPC S', summary: 'Secure Payment Confirmation success-style branch.', scenario: { ...DEFAULT_SCENARIO, transStatus: 'S', challengePresentation: 'oob' } },
-];
 
 const getScenarioSummary = (scenario: Scenario) => {
   if (scenario.challengeOutcome === 'optout') {
@@ -178,35 +112,6 @@ const getScenarioSummary = (scenario: Scenario) => {
   }
 };
 
-/**
- * Build a permalink for the current lab state. We anchor the URL to
- * `window.location.origin + window.location.pathname` (rather than
- * `new URL(window.location.href)`) so we never write state into a
- * parent window when the lab is embedded as an iframe. Returns the
- * URL plus a flag indicating whether the state was truncated to fit
- * within `SHARE_URL_BUDGET_BYTES`.
- */
-const buildShareUrl = (state: SharedAppState): { url: URL; truncated: boolean } => {
-  const base = typeof window !== 'undefined'
-    ? window.location.origin + window.location.pathname
-    : '/';
-  const url = new URL(base);
-  const json = JSON.stringify(state);
-  if (json.length <= SHARE_URL_BUDGET_BYTES) {
-    url.searchParams.set('state', json);
-    return { url, truncated: false };
-  }
-  // Truncate: drop the per-step position (the most expensive field)
-  // and retry. If that is still too large, fall back to a bare URL.
-  const trimmed: SharedAppState = { ...state, currentStepIndex: undefined };
-  const trimmedJson = JSON.stringify(trimmed);
-  if (trimmedJson.length <= SHARE_URL_BUDGET_BYTES) {
-    url.searchParams.set('state', trimmedJson);
-    return { url, truncated: true };
-  }
-  return { url, truncated: true };
-};
-
 function AppContent() {
   // Read directly from the external stores. Each store exposes a typed
   // useStore(selector) hook that uses useSyncExternalStore under the hood,
@@ -223,10 +128,10 @@ function AppContent() {
   const isLeftCollapsed = uiStore.useStore((s) => s.isLeftCollapsed);
   const isRightCollapsed = uiStore.useStore((s) => s.isRightCollapsed);
   const isScenarioToolbarCollapsed = uiStore.useStore((s) => s.isScenarioToolbarCollapsed);
+  const isTopBarCollapsed = uiStore.useStore((s) => s.isTopBarCollapsed);
   const securityLensEnabled = uiStore.useStore((s) => s.securityLensEnabled);
   const shareCopied = uiStore.useStore((s) => s.shareCopied);
   const detailsContext = uiStore.useStore((s) => s.detailsContext);
-  const hasLoadedSharedState = uiStore.useStore((s) => s.hasLoadedSharedState);
   const showListView = uiStore.useStore((s) => s.showListView);
   const visualizationMode = uiStore.useStore((s) => s.visualizationMode);
   const compareVersion = uiStore.useStore((s) => s.compareVersion);
@@ -235,27 +140,45 @@ function AppContent() {
   // === participant table inside the active-steps loop (3 sites: rail
   // color, anchor color, and internal-step color). For 30+ active
   // steps that is 90+ O(n) scans per render. Stable Map → O(1).
+  const scenarioParticipants = useMemo(
+    () => getParticipantsForScenario(scenario),
+    [scenario],
+  );
+
   const participantsById = useMemo(
-    () => new Map(PARTICIPANTS.map((p) => [p.id, p] as const)),
-    [],
+    () => new Map(scenarioParticipants.map((p) => [p.id, p] as const)),
+    [scenarioParticipants],
   );
 
   // Local-only UI: not in any store because nothing else needs it.
   const [isProfilingMounted, setIsProfilingMounted] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [, setPrefersReducedMotion] = useState(false);
+  const [isLegendExpanded, setIsLegendExpanded] = useState(false);
+  const [isTourOpen, setIsTourOpen] = useState(false);
   // Snapshot import feedback (transient; not worth putting in the store).
   const [snapshotImportStatus, setSnapshotImportStatus] = useState<{ kind: 'ok' | 'err'; message: string } | null>(null);
   const snapshotFileInputRef = useRef<HTMLInputElement>(null);
   const snapshotImportTimerRef = useRef<number | null>(null);
 
-  // Apply theme to the document body. We swap both `light-theme` and
-  // `security-theme` together so the body never carries stale classes
-  // from a previous selection (e.g. switching security→light must
-  // remove the security class, not just add light on top).
+  // Tour is user-initiated via the Tour button in the header for a clean, minimal initial load
+
+  const handleOpenTour = useCallback(() => {
+    setIsTourOpen(true);
+  }, []);
+
+  const handleCloseTour = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('emv_3ds_lab_tour_completed', 'true');
+    }
+    setIsTourOpen(false);
+  }, []);
+
+  // Apply theme to the document body (Light ↔ Dark).
   useEffect(() => {
     document.body.classList.remove('light-theme', 'security-theme');
-    if (theme === 'light') document.body.classList.add('light-theme');
-    else if (theme === 'security') document.body.classList.add('security-theme');
+    if (theme === 'light') {
+      document.body.classList.add('light-theme');
+    }
   }, [theme]);
 
   // Detect prefers-reduced-motion so we can dampen autoplay + animations.
@@ -268,34 +191,60 @@ function AppContent() {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  // Hydrate state from the shared URL (one-shot on mount).
+  // Hydrate state from the shared URL or GraphQL state store (one-shot on mount).
   useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const rawState = params.get('state');
-      if (rawState) {
-        const parsed = JSON.parse(rawState) as SharedAppState;
-        // Merge over the current default so we never end up with an
-        // undefined protocolVersion or other required field.
-        const mergedScenario: Scenario = parsed.scenario
-          ? { ...flowStore.getState().scenario, ...parsed.scenario }
-          : flowStore.getState().scenario;
-        flowActions.hydrate({
-          scenario: mergedScenario,
-          currentStepIndex: parsed.currentStepIndex,
-          hiddenGroups: parsed.hiddenGroups,
-        });
-        uiActions.hydrate({
-          theme: parsed.theme,
-          securityLensEnabled: parsed.securityLensEnabled,
-          isScenarioToolbarCollapsed: parsed.scenarioToolbarCollapsed,
-        });
+    async function loadInitialState() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const shortToken = params.get('s');
+        const rawState = params.get('state');
+
+        if (shortToken) {
+          const res = await executeGraphQL<{ savedState: { scenario: Scenario; currentStepIndex?: number } }>(`
+            query GetSavedState($token: ID!) {
+              savedState(token: $token) {
+                scenario {
+                  protocolVersion
+                  methodPath
+                  dsRouting
+                  transStatus
+                  challengeOutcome
+                  challengePresentation
+                }
+              }
+            }
+          `, { token: shortToken });
+
+          if (res.data?.savedState?.scenario) {
+            flowActions.setScenario(res.data.savedState.scenario);
+          }
+        } else if (rawState) {
+          const parsed = JSON.parse(rawState) as SharedAppState;
+          const mergedScenario: Scenario = parsed.scenario
+            ? { ...flowStore.getState().scenario, ...parsed.scenario }
+            : flowStore.getState().scenario;
+          flowActions.hydrate({
+            scenario: mergedScenario,
+            currentStepIndex: parsed.currentStepIndex,
+            hiddenGroups: parsed.hiddenGroups,
+          });
+          uiActions.hydrate({
+            theme: (parsed.theme === 'security' || !parsed.theme) ? 'light' : parsed.theme,
+            securityLensEnabled: parsed.securityLensEnabled,
+            isScenarioToolbarCollapsed: parsed.scenarioToolbarCollapsed ?? true,
+          });
+
+          // Clean up address bar: remove the giant ugly ?state={...} string
+          const cleanUrl = window.location.pathname + (window.location.hash || '');
+          window.history.replaceState({}, '', cleanUrl);
+        }
+      } catch {
+        // Ignore malformed shared state; fall back to defaults.
+      } finally {
+        uiActions.setHasLoadedSharedState(true);
       }
-    } catch {
-      // Ignore malformed shared state; fall back to defaults.
-    } finally {
-      uiActions.setHasLoadedSharedState(true);
     }
+    void loadInitialState();
   }, []);
 
   // When playback advances or manual stepping occurs, keep the details panel context
@@ -361,50 +310,42 @@ function AppContent() {
     [scenario]
   );
   const scenarioSummary = useMemo(() => getScenarioSummary(scenario), [scenario]);
-  const scenarioFacts = useMemo(
-    () => [
-      { label: 'Version', value: scenario.protocolVersion },
-      { label: 'Method', value: scenario.methodPath },
-      { label: 'DS', value: scenario.dsRouting },
-      { label: 'Challenge', value: scenario.challengePresentation === 'oob' ? 'oob' : 'html' },
-      { label: 'Result', value: scenario.transStatus },
-      ...(scenario.challengeOutcome === 'optout' ? [{ label: 'resultsStatus', value: '02' }] : []),
-    ],
-    [scenario]
+  const currentStepPayload = useMemo(
+    () => currentStep ? getDynamicPayload(currentStep, scenario) : null,
+    [currentStep, scenario]
   );
+  const scenarioFacts = useMemo(
+    () => {
+      const reasonCode =
+        typeof currentStepPayload?.transStatusReason === 'string' && currentStepPayload.transStatusReason
+          ? currentStepPayload.transStatusReason
+          : '';
+      const reasonLabel = getTransStatusReasonLabel(reasonCode);
 
-  // Persist a shareable URL whenever the user mutates state.
-  useEffect(() => {
-    if (!hasLoadedSharedState) return;
-    const { url, truncated } = buildShareUrl({
-      scenario,
-      currentStepIndex,
-      hiddenGroups: [...hiddenGroups],
-      theme,
-      securityLensEnabled,
-      scenarioToolbarCollapsed: isScenarioToolbarCollapsed,
-    });
-    window.history.replaceState({}, '', url);
-    if (truncated) {
-      // Visible in the import-toast slot. Not warning-grade because the
-      // permalink is still loadable; the position is just lost.
-      setSnapshotImportStatus({
-        kind: 'err',
-        message: 'Share link truncated — current step position omitted to fit URL budget.',
-      });
-      if (snapshotImportTimerRef.current) window.clearTimeout(snapshotImportTimerRef.current);
-      snapshotImportTimerRef.current = window.setTimeout(() => setSnapshotImportStatus(null), 3500);
-    }
-  }, [hasLoadedSharedState, scenario, currentStepIndex, hiddenGroups, theme, securityLensEnabled, isScenarioToolbarCollapsed]);
+      return [
+        { label: 'Version', value: scenario.protocolVersion },
+        { label: 'Method', value: scenario.methodPath },
+        { label: 'DS', value: scenario.dsRouting },
+        { label: 'Challenge', value: scenario.challengePresentation === 'oob' ? 'oob' : 'html' },
+        { label: 'Result', value: typeof currentStepPayload?.transStatus === 'string' ? currentStepPayload.transStatus : scenario.transStatus },
+        ...(reasonCode ? [{ label: 'Reason', value: reasonLabel ? `${reasonCode} ${reasonLabel}` : reasonCode }] : []),
+        ...(scenario.challengeOutcome === 'optout' ? [{ label: 'resultsStatus', value: '02' }] : []),
+      ];
+    },
+    [currentStepPayload, scenario]
+  );
+  const headerTransStatus =
+    typeof currentStepPayload?.transStatus === 'string' ? currentStepPayload.transStatus : scenario.transStatus;
 
-  // Auto-play effect. Honors prefers-reduced-motion by holding the step
-  // instead of advancing when the user has the OS-level setting on.
+  // Clean URL contract: We do not serialize huge JSON blobs into the browser address bar.
+  // The browser URL remains clean (e.g. "/" or "#/versions").
+  // Share permalinks are generated cleanly on-demand when clicking the Share button.
+
+  // Auto-play effect. We still allow playback for reduced-motion users;
+  // that preference should affect animation intensity, not disable the
+  // step sequencer entirely.
   useEffect(() => {
     if (!isPlaying) return;
-    if (prefersReducedMotion) {
-      flowActions.togglePlay();
-      return;
-    }
     const interval = setInterval(() => {
       const s = flowStore.getState();
       if (s.currentStepIndex >= s.activeSteps.length - 1) {
@@ -414,7 +355,7 @@ function AppContent() {
       flowActions.nextStep();
     }, playSpeed);
     return () => clearInterval(interval);
-  }, [isPlaying, playSpeed, prefersReducedMotion]);
+  }, [isPlaying, playSpeed]);
 
   // === Stable dispatcher for the 1–8 digit keyboard shortcuts. We use
   // === a `useCallback` that takes an index so the closure is stable
@@ -436,8 +377,17 @@ function AppContent() {
   // identity is stable across renders and we don't thrash window event
   // subscriptions.
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    const tag = document.activeElement?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement as HTMLElement | null)?.isContentEditable) {
+    const activeElement = document.activeElement as HTMLElement | null;
+    const tag = activeElement?.tagName;
+    if (
+      e.altKey ||
+      e.ctrlKey ||
+      e.metaKey ||
+      tag === 'INPUT' ||
+      tag === 'TEXTAREA' ||
+      tag === 'SELECT' ||
+      activeElement?.isContentEditable
+    ) {
       return;
     }
     const len = flowStore.getState().activeSteps.length;
@@ -449,7 +399,7 @@ function AppContent() {
       e.preventDefault();
       flowActions.togglePlay();
       flowActions.prevStep();
-    } else if (e.key === ' ') {
+    } else if (e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar') {
       e.preventDefault();
       flowActions.togglePlay();
     } else if (e.key === 'Home') {
@@ -467,8 +417,8 @@ function AppContent() {
   }, [applyScenarioPresetByIndex]);
 
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [handleKeyDown]);
 
   // React Flow instance view fitting
@@ -506,8 +456,10 @@ function AppContent() {
   }, []);
 
   // Camera glide management: when the active step changes, smoothly glide the viewport
-  // to center on the active interaction (the source/target participant columns)
-  // at a comfortable zoom level (0.85) so the node content is fully legible.
+  // Camera glide & focus management: when the active step changes, smoothly glide the viewport
+  // to center directly on the active step interaction (between source and target participants)
+  // at an optimal zoom level (0.84) so the payload, message labels, and participants are
+  // perfectly framed in the center of the user's viewport.
   const reactFlow = useReactFlow();
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -519,13 +471,15 @@ function AppContent() {
     }
 
     if (!currentStep) return;
-    const sourceX = X_COORDS[currentStep.source as keyof typeof X_COORDS] ?? 150;
-    const targetX = currentStep.target ? (X_COORDS[currentStep.target as keyof typeof X_COORDS] ?? sourceX) : sourceX;
-    const centerX = (sourceX + targetX) / 2;
-    const centerY = 140 + currentStepIndex * 90;
+
+    // Calculate true center of the active step interaction
+    const srcX = currentStep.source ? (X_COORDS[currentStep.source] ?? 800) : 800;
+    const tgtX = currentStep.target ? (X_COORDS[currentStep.target] ?? srcX) : srcX;
+    const stepCenterX = (srcX + tgtX) / 2;
+    const stepCenterY = 140 + currentStepIndex * 90;
 
     try {
-      reactFlow.setCenter(centerX, centerY + 30, { zoom: 0.85, duration: 320 });
+      reactFlow.setCenter(stepCenterX, stepCenterY, { zoom: 0.84, duration: 400 });
     } catch {
       // Fallback silently if reactFlow is not ready.
     }
@@ -645,7 +599,7 @@ function AppContent() {
     });
 
     const laneWidth = 220;
-    PARTICIPANTS.forEach((p) => {
+    scenarioParticipants.forEach((p) => {
       const isActorActive =
         !!currentStep &&
         (p.id === currentStep.source || p.id === currentStep.target);
@@ -667,7 +621,7 @@ function AppContent() {
       });
     });
 
-    PARTICIPANTS.forEach((p) => {
+    scenarioParticipants.forEach((p) => {
       const isActorActive = !!currentStep && (p.id === currentStep.source || p.id === currentStep.target);
 
       nodesList.push({
@@ -726,7 +680,7 @@ function AppContent() {
       });
 
       if (step.source && step.target) {
-        const sourcePart = PARTICIPANTS.find(p => p.id === step.source);
+        const sourcePart = participantsById.get(step.source);
         const sourceColor = sourcePart ? sourcePart.stroke : '#6366f1';
 
         nodesList.push({
@@ -797,7 +751,7 @@ function AppContent() {
     const edgesList: Edge[] = [];
     const lifelineLength = Math.max(1100, 180 + activeSteps.length * 90);
 
-    PARTICIPANTS.forEach((p) => {
+    scenarioParticipants.forEach((p) => {
       const isActorActive = !!currentStep && (p.id === currentStep.source || p.id === currentStep.target);
       edgesList.push({
         id: `lifeline_edge_${p.id}`,
@@ -1013,23 +967,33 @@ function AppContent() {
   const copyShareLink = useCallback(async () => {
     const state = flowStore.getState();
     const ui = uiStore.getState();
-    const { url, truncated } = buildShareUrl({
-      scenario: state.scenario,
-      currentStepIndex: state.currentStepIndex,
-      hiddenGroups: [...state.hiddenGroups],
-      theme: ui.theme,
-      securityLensEnabled: ui.securityLensEnabled,
-      scenarioToolbarCollapsed: ui.isScenarioToolbarCollapsed,
-    });
-    window.history.replaceState({}, '', url);
-    await navigator.clipboard.writeText(url.toString());
-    uiActions.setShareCopied(true);
-    if (truncated) {
-      setSnapshotImportStatus({ kind: 'err', message: 'Share link truncated — current step position omitted to fit URL budget.' });
-      if (snapshotImportTimerRef.current) window.clearTimeout(snapshotImportTimerRef.current);
-      snapshotImportTimerRef.current = window.setTimeout(() => setSnapshotImportStatus(null), 3500);
+
+    try {
+      const res = await executeGraphQL<{ saveState: { token: string; url: string } }>(`
+        mutation SaveState($input: SaveStateInput!) {
+          saveState(input: $input) {
+            token
+            url
+          }
+        }
+      `, {
+        input: {
+          scenario: state.scenario,
+          currentStepIndex: state.currentStepIndex,
+          theme: ui.theme,
+          securityLensEnabled: ui.securityLensEnabled,
+        },
+      });
+
+      const shareUrl = res.data?.saveState?.url || `${window.location.origin}/?s=default`;
+      await navigator.clipboard.writeText(shareUrl);
+      uiActions.setShareCopied(true);
+    } catch {
+      // Fallback
+      await navigator.clipboard.writeText(window.location.origin);
+      uiActions.setShareCopied(true);
     }
-    setTimeout(() => uiActions.setShareCopied(false), 1600);
+    setTimeout(() => uiActions.setShareCopied(false), 2000);
   }, []);
 
   // === Snapshot export. Triggers a JSON file download containing the
@@ -1123,201 +1087,237 @@ function AppContent() {
         {liveStepAnnouncement}
       </div>
 
-      {/* Compact Top Bar */}
-      <header className="app-header">
-        <div className="header-brand">
-          <BrandMark size={16} className="logo-icon" />
-          <span className="header-title">EMV 3DS Protocol Lab</span>
-          <span className="header-divider" />
-          <span
-            className="spec-badge"
-            title={`Active protocol version: ${scenario.protocolVersion}. Use the version toggle on the right to switch versions.`}
-          >
-            v{scenario.protocolVersion}
-          </span>
-          <span
-            className={`header-chip header-chip-status status-${scenario.transStatus.toLowerCase()}`}
-            title={`Transaction status: ${scenario.transStatus}${
-              scenario.transStatus === 'Y' ? ' — Authenticated (full liability shift)' :
-              scenario.transStatus === 'A' ? ' — Attempted authentication' :
-              scenario.transStatus === 'N' ? ' — Not authenticated' :
-              scenario.transStatus === 'U' ? ' — Unable to authenticate (technical error)' :
-              scenario.transStatus === 'R' ? ' — Rejected by ACS' :
-              scenario.transStatus === 'C' ? ' — Challenge required' :
-              scenario.transStatus === 'D' ? ' — Decoupled authentication' :
-              scenario.transStatus === 'I' ? ' — Information only (no liability shift)' :
-              scenario.transStatus === 'S' ? ' — Secure Payment Confirmation' : ''
-            }`}
-            aria-label={`transStatus ${scenario.transStatus}${
-              scenario.transStatus === 'Y' ? ', authenticated' :
-              scenario.transStatus === 'A' ? ', attempted' :
-              scenario.transStatus === 'N' ? ', not authenticated' :
-              scenario.transStatus === 'U' ? ', unable to authenticate' :
-              scenario.transStatus === 'R' ? ', rejected' :
-              scenario.transStatus === 'C' ? ', challenge required' :
-              scenario.transStatus === 'D' ? ', decoupled' :
-              scenario.transStatus === 'I' ? ', information only' :
-              scenario.transStatus === 'S' ? ', secure payment confirmation' : ''
-            }`}
-          >
-            {scenario.transStatus}
-          </span>
-          {securityLensEnabled && (
-            <span className="header-chip" style={{ color: 'var(--accent-secondary)', borderColor: 'var(--accent-secondary-border-trans)', background: 'var(--accent-secondary-bg-trans)' }}>
-              Research Lens
-            </span>
-          )}
-        </div>
-
-        <nav className="lp-inlab-nav" aria-label="Research pages">
-          <a href="#/versions" title="EMV 3DS version matrix">Versions</a>
-          <a href="#/fields" title="EMV 3DS field reference">Fields</a>
-          <a href="#/flows" title="EMV 3DS flow comparison">Flows</a>
-          <a href="#/pitfalls" title="EMV 3DS implementation pitfalls">Pitfalls</a>
-          <a href="#/cite" title="How to cite this lab">Cite</a>
-        </nav>
-
-        <div className="header-actions">
-          {/* === Version toggle (audit §1.2) === */}
-          <div
-            className="version-toggle"
-            role="radiogroup"
-            aria-label="EMV 3DS protocol version"
-            title="Switch the active protocol version. Newer versions hide phases that did not exist yet."
-          >
-            {PROTOCOL_VERSIONS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                role="radio"
-                aria-checked={scenario.protocolVersion === v}
-                onClick={() => setProtocolVersion(v)}
-                className={`version-toggle-btn ${scenario.protocolVersion === v ? 'active' : ''}`}
-                title={`Switch to EMV 3DS v${v}`}
+      {/* Top Bar (Hidden by default for maximal canvas space; user can expand via Menu button on canvas) */}
+      {!isTopBarCollapsed && (
+        <>
+          <header className="app-header">
+            <div className="header-brand">
+              <BrandMark size={16} className="logo-icon" />
+              <span className="header-title">EMV 3DS Protocol Lab</span>
+              <span className="header-divider" />
+              <span
+                className="spec-badge"
+                title={`Active protocol version: ${scenario.protocolVersion}. Use the version toggle on the right to switch versions.`}
               >
-                {v}
-              </button>
-            ))}
-          </div>
-
-          {/* === Visualization mode toggle (sequence ↔ branch) === */}
-          <div
-            className="version-toggle"
-            role="radiogroup"
-            aria-label="Visualization mode"
-            title="Switch between the linear sequence diagram and the branch-triage view"
-          >
-            {(['sequence', 'branch'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                role="radio"
-                aria-checked={visualizationMode === m}
-                onClick={() => uiActions.setVisualizationMode(m)}
-                className={`version-toggle-btn ${visualizationMode === m ? 'active' : ''}`}
-                title={`Switch to ${m} visualization`}
+                v{scenario.protocolVersion}
+              </span>
+              <span
+                className={`header-chip header-chip-status status-${headerTransStatus.toLowerCase()}`}
+                title={`Transaction status: ${headerTransStatus}`}
+                aria-label={`transStatus ${headerTransStatus}`}
               >
-                {m === 'sequence' ? 'Sequence' : 'Branch'}
+                {headerTransStatus}
+              </span>
+              {securityLensEnabled && (
+                <span className="header-chip" style={{ color: 'var(--accent-secondary)', borderColor: 'var(--accent-secondary-border-trans)', background: 'var(--accent-secondary-bg-trans)' }}>
+                  Security Lens
+                </span>
+              )}
+            </div>
+
+            <nav className="lp-inlab-nav" aria-label="Reference pages">
+              <a href="#/versions" className="inlab-nav-pill" title="EMV 3DS Version Matrix">Versions</a>
+              <a href="#/fields" className="inlab-nav-pill" title="EMV 3DS Field Reference">Fields</a>
+              <a href="#/flows" className="inlab-nav-pill" title="EMV 3DS Flow Comparison">Flows</a>
+              <a href="#/pitfalls" className="inlab-nav-pill" title="EMV 3DS Implementation Pitfalls">Pitfalls</a>
+              <a href="#/cite" className="inlab-nav-pill" title="How to Cite this Tool">Cite</a>
+            </nav>
+
+            <div className="header-actions">
+              <div
+                className="version-toggle"
+                role="radiogroup"
+                aria-label="EMV 3DS protocol version"
+                title="Switch active protocol version"
+              >
+                {PROTOCOL_VERSIONS.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    role="radio"
+                    aria-checked={scenario.protocolVersion === v}
+                    onClick={() => setProtocolVersion(v)}
+                    className={`version-toggle-btn ${scenario.protocolVersion === v ? 'active' : ''}`}
+                    title={`Switch to EMV 3DS v${v}`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+
+              <div
+                className="version-toggle"
+                role="radiogroup"
+                aria-label="Visualization mode"
+                title="Switch visualization mode"
+              >
+                {(['sequence', 'branch'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={visualizationMode === m}
+                    onClick={() => uiActions.setVisualizationMode(m)}
+                    className={`version-toggle-btn ${visualizationMode === m ? 'active' : ''}`}
+                    title={`Switch to ${m} visualization`}
+                  >
+                    {m === 'sequence' ? 'Sequence' : 'Branch'}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={exportSnapshot}
+                className="header-action-btn"
+                title="Download scenario snapshot"
+                aria-label="Download scenario snapshot"
+              >
+                <Download size={14} aria-hidden="true" />
+                <span>Snapshot</span>
               </button>
-            ))}
-          </div>
+              <button
+                onClick={() => snapshotFileInputRef.current?.click()}
+                className="header-action-btn"
+                title="Load snapshot file"
+                aria-label="Load snapshot file"
+              >
+                <Upload size={14} aria-hidden="true" />
+                <span>Load</span>
+              </button>
+              <input
+                ref={snapshotFileInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={onSnapshotFileChange}
+                style={{ display: 'none' }}
+                data-testid="snapshot-file-input"
+                aria-label="Choose snapshot JSON file"
+              />
 
-          <button
-            onClick={exportSnapshot}
-            className="header-action-btn"
-            title="Download a JSON snapshot of the current scenario state"
-            aria-label="Download scenario snapshot as JSON"
-          >
-            <Download size={14} aria-hidden="true" />
-            <span>Snapshot</span>
-          </button>
-          <button
-            onClick={() => snapshotFileInputRef.current?.click()}
-            className="header-action-btn"
-            title="Load a JSON snapshot file"
-            aria-label="Load scenario snapshot from file"
-          >
-            <Upload size={14} aria-hidden="true" />
-            <span>Load</span>
-          </button>
-          <input
-            ref={snapshotFileInputRef}
-            type="file"
-            accept="application/json,.json"
-            onChange={onSnapshotFileChange}
-            style={{ display: 'none' }}
-            data-testid="snapshot-file-input"
-            aria-label="Choose snapshot JSON file"
-          />
+              <button
+                onClick={handleOpenTour}
+                className="header-action-btn"
+                title="Take Guided Tour of the Lab"
+                aria-label="Take Guided Tour of the Lab"
+                style={{
+                  color: 'var(--accent-primary)',
+                  borderColor: 'var(--border-color)',
+                  background: 'rgba(37, 99, 235, 0.06)'
+                }}
+              >
+                <Compass size={14} aria-hidden="true" />
+                <span>Tour</span>
+              </button>
+              <button
+                onClick={() => void copyShareLink()}
+                className="header-action-btn"
+                title="Copy permalink"
+                aria-label="Copy permalink"
+              >
+                <Link2 size={14} aria-hidden="true" />
+                <span>{shareCopied ? 'Copied' : 'Share'}</span>
+              </button>
+              <button
+                onClick={() => uiActions.toggleSecurityLens()}
+                className={`header-action-btn ${securityLensEnabled ? 'active' : ''}`}
+                title="Toggle Security Lens"
+                aria-label="Toggle Security Lens"
+              >
+                <Crosshair size={14} aria-hidden="true" />
+              </button>
+              <button
+                onClick={openGlossary}
+                className="header-action-btn"
+                title="Open 3DS Glossary"
+                aria-label="Open 3DS Glossary"
+              >
+                <BookOpen size={14} aria-hidden="true" />
+              </button>
+              <button
+                onClick={() => uiActions.cycleTheme()}
+                className="theme-toggle-btn"
+                title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+                aria-label={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+              >
+                {theme === 'light' ? (
+                  <Moon size={14} aria-hidden="true" />
+                ) : (
+                  <Sun size={14} aria-hidden="true" />
+                )}
+              </button>
+              <button
+                onClick={() => uiActions.toggleListView()}
+                className="header-action-btn"
+                title={showListView ? 'Switch to canvas view' : 'Switch to list view'}
+                aria-label={showListView ? 'Switch to canvas view' : 'Switch to list view'}
+                aria-pressed={showListView}
+              >
+                <List size={14} aria-hidden="true" />
+              </button>
+              <button
+                onClick={() => uiActions.setTopBarCollapsed(true)}
+                className="header-action-btn"
+                title="Hide top bar (maximize canvas)"
+                aria-label="Hide top bar"
+                style={{
+                  color: 'var(--text-muted)',
+                  borderColor: 'var(--border-color)',
+                  marginLeft: '4px'
+                }}
+              >
+                <ChevronUp size={13} aria-hidden="true" />
+                <span>Hide</span>
+              </button>
+            </div>
+          </header>
 
-          <button
-            onClick={() => void copyShareLink()}
-            className="header-action-btn"
-            title="Copy a permalink for the current scenario state"
-            aria-label="Copy a permalink for the current scenario state"
-          >
-            <Link2 size={14} aria-hidden="true" />
-            <span>{shareCopied ? 'Copied' : 'Share'}</span>
-          </button>
-          <button
-            onClick={() => uiActions.toggleSecurityLens()}
-            className="header-action-btn"
-            title={securityLensEnabled ? 'Disable Security Research Lens' : 'Enable Security Research Lens'}
-            aria-label={securityLensEnabled ? 'Disable Security Research Lens' : 'Enable Security Research Lens'}
-            aria-pressed={securityLensEnabled}
-            style={securityLensEnabled ? {
-              color: 'var(--accent-secondary)',
-              borderColor: 'var(--accent-secondary-border-trans)',
-              background: 'var(--accent-secondary-bg-trans)'
-            } : undefined}
-          >
-            <Crosshair size={14} aria-hidden="true" />
-          </button>
-          <button
-            onClick={openGlossary}
-            className="header-action-btn"
-            title="Open 3DS Glossary & Reference"
-            aria-label="Open 3DS Glossary and Reference"
-          >
-            <BookOpen size={14} aria-hidden="true" />
-          </button>
-          <button
-            onClick={() => uiActions.cycleTheme()}
-            className="theme-toggle-btn"
-            title={
-              theme === 'dark'
-                ? 'Switch to Light Mode'
-                : theme === 'light'
-                ? 'Switch to Security Mode'
-                : 'Switch to Dark Mode'
-            }
-            aria-label={
-              theme === 'dark'
-                ? 'Switch to Light Mode (currently Dark)'
-                : theme === 'light'
-                ? 'Switch to Security Mode (currently Light)'
-                : 'Switch to Dark Mode (currently Security)'
-            }
-          >
-            {theme === 'dark' ? (
-              <Sun size={14} aria-hidden="true" />
-            ) : theme === 'light' ? (
-              <Moon size={14} aria-hidden="true" />
-            ) : (
-              <Terminal size={14} aria-hidden="true" />
+          <section className={`scenario-toolbar ${isScenarioToolbarCollapsed ? 'collapsed' : ''}`}>
+            <div className="scenario-toolbar-row">
+              <button
+                type="button"
+                className="scenario-toolbar-toggle"
+                onClick={() => uiActions.toggleScenarioToolbar()}
+                title={isScenarioToolbarCollapsed ? 'Expand scenario catalog' : 'Collapse scenario catalog'}
+                aria-expanded={!isScenarioToolbarCollapsed}
+                aria-label="Toggle scenario catalog"
+              >
+                <Layers size={12} aria-hidden="true" />
+                <span className="scenario-toolbar-kicker">Scenario</span>
+                {isScenarioToolbarCollapsed ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronUp size={12} aria-hidden="true" />}
+              </button>
+              <div className="scenario-toolbar-copy">
+                <strong>{scenarioSummary.title}</strong>
+                {!isScenarioToolbarCollapsed && <span>{scenarioSummary.description}</span>}
+              </div>
+              <div className="scenario-facts">
+                {scenarioFacts.map((fact) => (
+                  <div key={fact.label} className="scenario-fact-pill">
+                    <span className="scenario-fact-label">{fact.label}</span>
+                    <span className="scenario-fact-value">{fact.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {!isScenarioToolbarCollapsed && (
+              <div className="scenario-preset-list">
+                {SCENARIO_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={`scenario-preset-btn ${scenarioPresetId === preset.id ? 'active' : ''}`}
+                    onClick={() => applyScenarioPreset(preset)}
+                    title={preset.summary}
+                    aria-label={`Apply ${preset.label} scenario: ${preset.summary}`}
+                  >
+                    <span className="scenario-preset-label">{preset.label}</span>
+                    <span className="scenario-preset-summary">{preset.summary}</span>
+                  </button>
+                ))}
+              </div>
             )}
-          </button>
-          <button
-            onClick={() => uiActions.toggleListView()}
-            className="header-action-btn"
-            title={showListView ? 'Switch to canvas view' : 'Switch to list view (A11y fallback)'}
-            aria-label={showListView ? 'Switch to canvas view' : 'Switch to list view (accessibility fallback)'}
-            aria-pressed={showListView}
-          >
-            <List size={14} aria-hidden="true" />
-          </button>
-        </div>
-      </header>
+          </section>
+        </>
+      )}
 
       {/* Snapshot import status toast (audit §1.3 / §4.3) */}
       {snapshotImportStatus && (
@@ -1343,57 +1343,11 @@ function AppContent() {
         </div>
       )}
 
-      <section className={`scenario-toolbar ${isScenarioToolbarCollapsed ? 'collapsed' : ''}`}>
-        <div className="scenario-toolbar-row">
-          <button
-            type="button"
-            className="scenario-toolbar-toggle"
-            onClick={() => uiActions.toggleScenarioToolbar()}
-            title={isScenarioToolbarCollapsed ? 'Expand scenario catalog' : 'Collapse scenario catalog'}
-            aria-expanded={!isScenarioToolbarCollapsed}
-            aria-label="Toggle scenario catalog"
-          >
-            <Sparkles size={12} aria-hidden="true" />
-            <span className="scenario-toolbar-kicker">Scenario</span>
-            {isScenarioToolbarCollapsed ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronUp size={12} aria-hidden="true" />}
-          </button>
-          <div className="scenario-toolbar-copy">
-            <strong>{scenarioSummary.title}</strong>
-            {!isScenarioToolbarCollapsed && <span>{scenarioSummary.description}</span>}
-          </div>
-          <div className="scenario-facts">
-            {scenarioFacts.map((fact) => (
-              <div key={fact.label} className="scenario-fact-pill">
-                <span className="scenario-fact-label">{fact.label}</span>
-                <span className="scenario-fact-value">{fact.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        {!isScenarioToolbarCollapsed && (
-          <div className="scenario-preset-list">
-            {SCENARIO_PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className={`scenario-preset-btn ${scenarioPresetId === preset.id ? 'active' : ''}`}
-                onClick={() => applyScenarioPreset(preset)}
-                title={preset.summary}
-                aria-label={`Apply ${preset.label} scenario: ${preset.summary}`}
-              >
-                <span className="scenario-preset-label">{preset.label}</span>
-                <span className="scenario-preset-summary">{preset.summary}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
       {/* Main Dashboard Layout with smooth width transitions */}
       <main
         className="dashboard-grid"
         style={{
-          gridTemplateColumns: `${isLeftCollapsed ? '0px' : '320px'} 1fr ${isRightCollapsed ? '0px' : '350px'}`,
+          gridTemplateColumns: `${isLeftCollapsed ? '0px' : '340px'} 1fr ${isRightCollapsed ? '0px' : '370px'}`,
           transition: 'grid-template-columns 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
         }}
       >
@@ -1436,6 +1390,212 @@ function AppContent() {
             {isRightCollapsed ? <ChevronLeft size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
           </button>
 
+          {/* Unified Canvas Header Bar — Prevents any overlaps between Phases, Participants, and Menu */}
+          {!showListView && visualizationMode === 'sequence' && (
+            <div className="canvas-header-bar" role="toolbar" aria-label="Canvas controls and participants">
+              {/* Left: Step Groups (Phases) Filter & Dropdown */}
+              <div className="canvas-header-left">
+                <button
+                  type="button"
+                  className="legend-toggle-pill"
+                  onClick={() => setIsLegendExpanded(!isLegendExpanded)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  title={isLegendExpanded ? 'Collapse step phases legend' : 'Expand step phases legend'}
+                  aria-expanded={isLegendExpanded}
+                  aria-label="Toggle step phases legend"
+                >
+                  <Layers size={13} aria-hidden="true" />
+                  <span>Phases ({STEP_GROUPS.length - hiddenGroups.length}/{STEP_GROUPS.length})</span>
+                  {isLegendExpanded ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronUp size={12} aria-hidden="true" />}
+                </button>
+
+                {isLegendExpanded && (
+                  <div
+                    className="canvas-legend fade-in"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                  >
+                    <div className="legend-header">
+                      <h4 className="legend-title">Step Groups (Phases)</h4>
+                      <div className="legend-header-actions">
+                        <button
+                          type="button"
+                          className="legend-mini-btn"
+                          onClick={showAllGroups}
+                          disabled={hiddenGroups.length === 0}
+                          title="Show all phases"
+                          aria-label="Show all phases"
+                        >
+                          <Eye size={11} aria-hidden="true" />
+                          <span>All</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="legend-mini-btn"
+                          onClick={hideAllGroups}
+                          disabled={hiddenGroups.length === activeGroups.length}
+                          title="Hide all phases"
+                          aria-label="Hide all phases"
+                        >
+                          <EyeOff size={11} aria-hidden="true" />
+                          <span>None</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="legend-items legend-groups">
+                      {STEP_GROUPS.map((g) => {
+                        const isHidden = hiddenGroups.includes(g.id);
+                        const inActive = activeGroups.some((ag) => ag.id === g.id);
+                        const isIsolated =
+                          !isHidden &&
+                          STEP_GROUPS.filter((other) => other.id !== g.id).every(
+                            (other) => hiddenGroups.includes(other.id)
+                          ) &&
+                          hiddenGroups.length > 0;
+                        return (
+                          <div
+                            key={g.id}
+                            className={`legend-group-row ${currentStep?.groupId === g.id ? 'is-current' : ''} ${isHidden ? 'is-hidden' : ''} ${!inActive ? 'is-inactive' : ''} ${isIsolated ? 'is-isolated' : ''}`}
+                            title={g.description}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleGroupVisibility(g.id)}
+                              disabled={!inActive && isHidden}
+                              className={`legend-group-item ${currentStep?.groupId === g.id ? 'is-current' : ''} ${isHidden ? 'is-hidden' : ''} ${!inActive ? 'is-inactive' : ''}`}
+                              title={isHidden ? `Show "${g.title}" phase` : `Hide "${g.title}" phase`}
+                              aria-label={isHidden ? `Show ${g.title} phase` : `Hide ${g.title} phase`}
+                              aria-pressed={isHidden}
+                            >
+                              <span className="legend-group-swatch" style={{ background: g.color }} />
+                              <span className="legend-group-label">{g.title}</span>
+                              <span className="legend-group-eye" aria-hidden="true">
+                                {isHidden ? <EyeOff size={11} /> : <Eye size={11} />}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className={`legend-isolate-btn ${isIsolated ? 'is-active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isIsolated) {
+                                  showAllGroups();
+                                } else {
+                                  isolateGroup(g.id);
+                                }
+                              }}
+                              title={isIsolated ? `Exit isolated view (showing only "${g.title}")` : `Isolate "${g.title}" — show only this phase`}
+                              aria-label={isIsolated ? `Show all phases (currently isolated to ${g.title})` : `Isolate ${g.title} phase`}
+                            >
+                              <Crosshair size={11} aria-hidden="true" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {hiddenGroups.length > 0 && (
+                      <div className="legend-hidden-banner" role="status">
+                        {hiddenGroups.length} phase{hiddenGroups.length === 1 ? '' : 's'} hidden — click an entry above to show.
+                      </div>
+                    )}
+                    <h4 className="legend-title" style={{ marginTop: '8px' }}>Participants</h4>
+                    <div className="legend-items">
+                      {scenarioParticipants.map((p) => (
+                        <div key={p.id} className="legend-item">
+                          <span className="legend-dot" style={{ background: p.stroke }} />
+                          <span>{p.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Center: Persistent Participant Lane Bar */}
+              <div className="canvas-header-center">
+                <div className="canvas-participant-bar" role="region" aria-label="EMV 3DS Participants">
+                  {scenarioParticipants.map((p) => {
+                    const isSource = !!currentStep && p.id === currentStep.source;
+                    const isTarget = !!currentStep && p.id === currentStep.target;
+                    const isActorActive = isSource || isTarget;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className={`participant-bar-pill ${isActorActive ? 'is-active' : ''} ${isSource ? 'is-source' : ''} ${isTarget ? 'is-target' : ''}`}
+                        style={{
+                          '--participant-stroke': p.stroke,
+                        } as React.CSSProperties}
+                        onClick={() => uiActions.setDetailsContext({ kind: 'participant', participantId: p.id })}
+                        title={`${p.fullName} — click to view profile`}
+                        aria-label={`${p.name} (${p.fullName})${isSource ? ' (Sending)' : isTarget ? ' (Receiving)' : ''}`}
+                      >
+                        <span className="participant-bar-dot" style={{ background: p.stroke }} />
+                        <span className="participant-bar-name">{p.name}</span>
+                        <span className="participant-bar-code">{p.id}</span>
+                        {isSource && <span className="participant-role-tag sender">OUT</span>}
+                        {isTarget && <span className="participant-role-tag receiver">IN</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Right: Floating Menu Pill when top bar is collapsed */}
+              <div className="canvas-header-right">
+                {isTopBarCollapsed && (
+                  <div
+                    className="top-bar-floating-pill"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background: 'var(--bg-glass)',
+                      backdropFilter: 'blur(12px)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '20px',
+                      padding: '4px 12px 4px 10px',
+                      boxShadow: 'var(--shadow-md)',
+                      animation: 'fadeIn 0.2s ease',
+                    }}
+                  >
+                    <BrandMark size={14} className="logo-icon" />
+                    <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      EMV 3DS Lab
+                    </span>
+                    <span style={{ fontSize: '10px', color: 'var(--accent-primary)', fontWeight: 700 }}>
+                      v{scenario.protocolVersion}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => uiActions.setTopBarCollapsed(false)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        marginLeft: '2px',
+                        padding: '3px 9px',
+                        fontSize: '10.5px',
+                        fontWeight: 700,
+                        color: 'var(--accent-primary)',
+                        background: 'rgba(37, 99, 235, 0.08)',
+                        border: '1px solid rgba(37, 99, 235, 0.2)',
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                      }}
+                      title="Expand top navigation & scenario toolbar"
+                      aria-label="Expand top navigation"
+                    >
+                      <span>Menu</span>
+                      <ChevronDown size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="canvas-flow-shell">
             {/*
               A11y fallback: when uiStore.showListView is true, hide the
@@ -1453,8 +1613,8 @@ function AppContent() {
                 </p>
                 <ol className="list-view-list" aria-label="Active flow steps in chronological order">
                   {activeSteps.map((step, idx) => {
-                    const src = PARTICIPANTS.find(p => p.id === step.source);
-                    const tgt = PARTICIPANTS.find(p => p.id === step.target);
+                    const src = step.source ? participantsById.get(step.source) : undefined;
+                    const tgt = step.target ? participantsById.get(step.target) : undefined;
                     const isCurrent = idx === currentStepIndex;
                     const isError = /err|invalid/i.test(step.num) || step.id.includes('err') || step.id.includes('invalid');
                     return (
@@ -1550,8 +1710,15 @@ function AppContent() {
               edgeTypes={edgeTypes}
               onNodeClick={onNodeClick}
               onEdgeClick={onEdgeClick}
-              fitView
-              fitViewOptions={{ padding: 0.15 }}
+              defaultViewport={{ x: 0, y: 0, zoom: 0.78 }}
+              minZoom={0.2}
+              maxZoom={2.5}
+              onInit={(instance) => {
+                const centerY = 140 + currentStepIndex * 90;
+                setTimeout(() => {
+                  instance.setCenter(800, centerY + 20, { zoom: 0.78, duration: 0 });
+                }, 60);
+              }}
               nodesDraggable={false}
               nodesConnectable={false}
               elementsSelectable={true}
@@ -1617,100 +1784,7 @@ function AppContent() {
 
             {isProfilingMounted && !showListView && <BrowserFingerprintWidget />}
 
-            <div className="canvas-legend">
-              <div className="legend-header">
-                <h4 className="legend-title">Step Groups (Phases)</h4>
-                <div className="legend-header-actions">
-                  <button
-                    type="button"
-                    className="legend-mini-btn"
-                    onClick={showAllGroups}
-                    disabled={hiddenGroups.length === 0}
-                    title="Show all phases"
-                    aria-label="Show all phases"
-                  >
-                    <Eye size={11} aria-hidden="true" />
-                    <span>All</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="legend-mini-btn"
-                    onClick={hideAllGroups}
-                    disabled={hiddenGroups.length === activeGroups.length}
-                    title="Hide all phases"
-                    aria-label="Hide all phases"
-                  >
-                    <EyeOff size={11} aria-hidden="true" />
-                    <span>None</span>
-                  </button>
-                </div>
-              </div>
-              <div className="legend-items legend-groups">
-                {STEP_GROUPS.map((g) => {
-                  const isHidden = hiddenGroups.includes(g.id);
-                  const inActive = activeGroups.some((ag) => ag.id === g.id);
-                  const isIsolated =
-                    !isHidden &&
-                    STEP_GROUPS.filter((other) => other.id !== g.id).every(
-                      (other) => hiddenGroups.includes(other.id)
-                    ) &&
-                    hiddenGroups.length > 0;
-                  return (
-                    <div
-                      key={g.id}
-                      className={`legend-group-row ${currentStep?.groupId === g.id ? 'is-current' : ''} ${isHidden ? 'is-hidden' : ''} ${!inActive ? 'is-inactive' : ''} ${isIsolated ? 'is-isolated' : ''}`}
-                      title={g.description}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleGroupVisibility(g.id)}
-                        disabled={!inActive && isHidden}
-                        className={`legend-group-item ${currentStep?.groupId === g.id ? 'is-current' : ''} ${isHidden ? 'is-hidden' : ''} ${!inActive ? 'is-inactive' : ''}`}
-                        title={isHidden ? `Show "${g.title}" phase` : `Hide "${g.title}" phase`}
-                        aria-label={isHidden ? `Show ${g.title} phase` : `Hide ${g.title} phase`}
-                        aria-pressed={isHidden}
-                      >
-                        <span className="legend-group-swatch" style={{ background: g.color }} />
-                        <span className="legend-group-label">{g.title}</span>
-                        <span className="legend-group-eye" aria-hidden="true">
-                          {isHidden ? <EyeOff size={11} /> : <Eye size={11} />}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className={`legend-isolate-btn ${isIsolated ? 'is-active' : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (isIsolated) {
-                            showAllGroups();
-                          } else {
-                            isolateGroup(g.id);
-                          }
-                        }}
-                        title={isIsolated ? `Exit isolated view (showing only "${g.title}")` : `Isolate "${g.title}" — show only this phase`}
-                        aria-label={isIsolated ? `Show all phases (currently isolated to ${g.title})` : `Isolate ${g.title} phase`}
-                      >
-                        <Crosshair size={11} aria-hidden="true" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-              {hiddenGroups.length > 0 && (
-                <div className="legend-hidden-banner" role="status">
-                  {hiddenGroups.length} phase{hiddenGroups.length === 1 ? '' : 's'} hidden — click an entry above to show.
-                </div>
-              )}
-              <h4 className="legend-title" style={{ marginTop: '8px' }}>Participants</h4>
-              <div className="legend-items">
-                {PARTICIPANTS.map((p) => (
-                  <div key={p.id} className="legend-item">
-                    <span className="legend-dot" style={{ background: p.stroke }} />
-                    <span>{p.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+
           </div>
         </section>
 
@@ -1736,6 +1810,9 @@ function AppContent() {
         </aside>
       </main>
 
+      {/* Guided Tour for new and returning users */}
+      <TourGuide isOpen={isTourOpen} onClose={handleCloseTour} />
+
       {/* === Sandbox isolation footer (audit §4.3 / axis 6) ===
            One-line credibility cue for security engineers: this tool
            renders static reference payloads, makes no network calls,
@@ -1755,7 +1832,21 @@ function AppContent() {
           </span>
         </div>
         <div className="sandbox-banner-meta">
-          <span className="sandbox-credit">Built by {PROJECT_AUTHOR_LABEL}</span>
+          <span className="sandbox-credit">
+            Protocol Research & Architecture by{' '}
+            <a
+              className="author-badge"
+              href={PROJECT_LINKEDIN_URL}
+              target="_blank"
+              rel="noreferrer"
+              title={`${PROJECT_AUTHOR_NAME} — ${PROJECT_AUTHOR_ROLE} (${PROJECT_AUTHOR_AFFILIATION})`}
+              aria-label={`${PROJECT_AUTHOR_NAME} LinkedIn profile`}
+            >
+              <ShieldCheck size={12} className="author-badge-icon" aria-hidden="true" />
+              <span className="author-badge-name">{PROJECT_AUTHOR_NAME}</span>
+              <span className="author-badge-inst">· {PROJECT_AUTHOR_AFFILIATION}</span>
+            </a>
+          </span>
           <a
             className="sandbox-repo-link"
             href={PROJECT_LINKEDIN_URL}
@@ -1798,6 +1889,7 @@ function AppContent() {
 // memoization — does not tear down. Without this, the 80ms progress
 // interval reset and the user sees a 0% bar for 1 frame.
 const BrowserFingerprintWidget = memo(function BrowserFingerprintWidget() {
+  const deviceChannel = flowStore.useStore((s) => s.scenario.deviceChannel);
   // We read the same five browser attributes the EMVCo §3.1.2.3 list
   // requires, but the canonical list is wider. The full EMVCo reference
   // is shown below the live data; the live row is an *educational
@@ -1843,7 +1935,7 @@ const BrowserFingerprintWidget = memo(function BrowserFingerprintWidget() {
       case 'BrowserScreenWidth': return String(window.screen.width);
       case 'BrowserTZ': return `${liveData.tzOffset} min`;
       case 'BrowserUserAgent': return liveData.userAgent;
-      case 'DeviceChannel': return '02 (Browser)';
+      case 'DeviceChannel': return deviceChannel === 'app' ? '01 (App / SDK)' : '02 (Browser)';
       default: return null;
     }
   };
@@ -1861,13 +1953,23 @@ const BrowserFingerprintWidget = memo(function BrowserFingerprintWidget() {
             EMVCo §3.1.2.3 — Device Data Reference
           </span>
         </div>
-        <span style={{ fontSize: '9px', opacity: 0.7 }}>3DS Method iframe</span>
+        <span style={{ fontSize: '9px', opacity: 0.7 }}>
+          {deviceChannel === 'app' ? '3DS SDK data collection' : '3DS Method iframe'}
+        </span>
       </div>
 
       <div style={{ fontSize: '10px', color: 'var(--text-muted)', lineHeight: 1.45, padding: '4px 0 6px', borderBottom: '1px dashed var(--border-color)', marginBottom: '6px' }}>
-        The 3DS Method URL is allowed to read these browser/device attributes
-        for risk scoring. The live row below shows what <em>your</em> browser
-        would report — <strong>nothing is transmitted</strong>.
+        {deviceChannel === 'app' ? (
+          <>
+            In an app-based flow, the 3DS SDK gathers device attributes for risk scoring and correlates them with the SDK transaction. The live row below shows the browser-derivable values available in this runtime as a reference only. <strong>Nothing is transmitted</strong>.
+          </>
+        ) : (
+          <>
+            The 3DS Method URL is allowed to read these browser/device attributes
+            for risk scoring. The live row below shows what <em>your</em> browser
+            would report. <strong>Nothing is transmitted</strong>.
+          </>
+        )}{' '}
         See <code>EMVCo §3.1.2.3</code> in the latest spec for the canonical list.
       </div>
 
@@ -2034,10 +2136,33 @@ function SiteHeader({ route }: { route: RouteId }) {
 
 function SiteFooter() {
   return (
-    <footer className="lp-foot lp-site-foot" role="contentinfo">
-      <p>
-        Built by Wasif Faisal, BRAC University. Open data, open research. Apache-2.0.
-      </p>
+    <footer className="lp-site-footer" role="contentinfo">
+      <div className="lp-site-footer-inner">
+        <p style={{ margin: 0, lineHeight: 1.5 }}>
+          Conceived, Designed & Architected by{' '}
+          <a
+            href={PROJECT_LINKEDIN_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="author-name-link"
+            style={{ fontWeight: 700, color: 'var(--accent-primary)', textDecoration: 'underline' }}
+          >
+            Wasif Faisal
+          </a>{' '}
+          (BRAC University) · Open EMV 3DS reference tooling · Apache-2.0.
+        </p>
+        <div className="lp-site-footer-links">
+          <a href="https://github.com/cnpshield/3dslab" target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+          <a href="https://www.linkedin.com/in/cswasif/" target="_blank" rel="noreferrer">
+            LinkedIn
+          </a>
+          <a href="mailto:md.wasif.faisal@g.bracu.ac.bd">
+            Contact
+          </a>
+        </div>
+      </div>
     </footer>
   );
 }

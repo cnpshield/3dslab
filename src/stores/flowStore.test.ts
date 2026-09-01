@@ -4,6 +4,7 @@ import type { FlowStep, Scenario, StepGroupId } from '../types';
 
 const SAMPLE_SCENARIO: Scenario = {
   protocolVersion: '2.3.1',
+  deviceChannel: 'browser',
   methodPath: 'executed',
   dsRouting: 'normal',
   transStatus: 'Y',

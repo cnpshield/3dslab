@@ -167,53 +167,54 @@ const CustomMessageEdgeInner: React.FC<EdgeProps> = ({
               aria-current={isSelected ? 'true' : undefined}
               data-selected={isSelected || undefined}
               style={{
-                background: 'var(--bg-secondary)',
+                background: isCurrent ? 'var(--bg-tertiary)' : isSelected ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
                 border: isError
                   ? `1.5px dashed ${strokeColor}`
                   : isSelected
                     ? `2.5px solid ${strokeColor}`
-                    : `1.5px solid ${isCurrent ? strokeColor : 'var(--border-color)'}`,
+                    : `1.5px solid ${isCurrent ? strokeColor : 'rgba(148, 163, 184, 0.25)'}`,
                 color: isCurrent || isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-                padding: '6px 12px',
+                padding: '7px 14px',
                 borderRadius: '8px',
-                fontSize: '10.5px',
+                fontSize: '11px',
                 fontWeight: '700',
                 boxShadow: isSelected
-                  ? `0 4px 16px ${strokeColor}40, 0 0 0 2px ${strokeColor}20`
+                  ? `0 0 20px ${strokeColor}55, 0 6px 20px rgba(0,0,0,0.4)`
                   : isCurrent
-                    ? `0 4px 12px ${strokeColor}25, 0 1px 3px rgba(0,0,0,0.1)`
-                    : 'var(--shadow-sm)',
+                    ? `0 0 16px ${strokeColor}40, 0 4px 14px rgba(0,0,0,0.35)`
+                    : '0 2px 8px rgba(0,0,0,0.25)',
                 cursor: 'pointer',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '2px',
+                gap: '4px',
                 alignItems: 'center',
                 textAlign: 'center',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
               }}
               role="button"
               tabIndex={isSelected ? 0 : -1}
               aria-label={`Message ${edgeData?.msgType || ''} ${typeof label === 'string' ? label : ''} ${flowsRight ? 'flowing right' : 'flowing left'}${isSelected ? ' (selected)' : ''}`}
               data-testid={`edge-label-${id}`}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 {edgeData?.msgType && (
                   <span style={{
-                    background: `${strokeColor}18`,
+                    background: `${strokeColor}22`,
                     color: strokeColor,
-                    padding: '1px 4px',
+                    padding: '2px 6px',
                     borderRadius: '4px',
-                    fontSize: '9px',
+                    fontSize: '9.5px',
                     fontWeight: '800',
-                    border: `1px solid ${strokeColor}25`
+                    border: `1px solid ${strokeColor}40`,
+                    letterSpacing: '0.04em'
                   }}>
                     {edgeData.msgType}
                   </span>
                 )}
-                <span>{label}</span>
+                <span style={{ color: 'var(--text-primary)', letterSpacing: '0.01em' }}>{label}</span>
                 <DirectionIcon
-                  size={12}
-                  strokeWidth={2.8}
+                  size={13}
+                  strokeWidth={2.6}
                   style={{
                     color: isCurrent ? strokeColor : 'var(--text-muted)',
                     flexShrink: 0,

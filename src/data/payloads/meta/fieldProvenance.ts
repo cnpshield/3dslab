@@ -106,7 +106,7 @@ export const AReq_FIELDS: FieldProvenance[] = [
   emvco('merchantCountryCode', '2.1.0', 'Table B.1', 'ISO 3166-1 numeric country code of the merchant.'),
   emvco('merchantName', '2.1.0', 'Table B.1', 'Merchant name as it should appear on the cardholder statement.'),
   emvco('merchantRiskIndicator', '2.1.0', 'Table B.1', 'Optional container for merchant-side risk data the issuer may use in the risk decision.'),
-  emvco('messageCategory', '2.1.0', 'Table B.1', 'Category of message: 01 (Payment Authentication), 02 (Non-Payment), 80–85 (data-only 3RI subcategories).'),
+  emvco('messageCategory', '2.1.0', 'Table B.1', 'Category of message: 01 (Payment Authentication), 02 (Non-Payment); 03-79 are reserved for future EMVCo use and 80-99 are reserved for DS use.'),
   emvco('messageExtension', '2.1.0', 'Table B.1', 'Optional list of extension fields; provides a forward-compatibility escape hatch for non-standard data.'),
   emvco('messageType', '2.1.0', 'Table B.1', 'Discriminator for the message type; always AReq on this envelope.'),
   emvco('messageVersion', '2.1.0', 'Table B.1', 'Protocol version in effect for this transaction.'),
@@ -133,7 +133,7 @@ export const AReq_FIELDS: FieldProvenance[] = [
   emvco('shipAddrLine3', '2.1.0', 'Table B.1', 'Shipping address line 3.'),
   emvco('shipAddrPostCode', '2.1.0', 'Table B.1', 'Shipping address postal code.'),
   emvco('shipAddrState', '2.1.0', 'Table B.1', 'Shipping address state or province code.'),
-  emvco('threeDSCompInd', '2.1.0', 'Table B.1', 'Indicates whether the 3DS Requestor challenges the cardholder: Y (yes), N (no preference), U (data unavailable).'),
+  emvco('threeDSCompInd', '2.1.0', 'Table B.1', 'Indicates 3DS Method completion status in the AReq: Y (completed or recent prior successful method reused), N (not completed), U (unavailable).'),
   emvco('threeDSRequestorAuthenticationInd', '2.1.0', 'Table B.1', 'Indicates the 3DS Requestor has prior authentication data the issuer can use.'),
   emvco('threeDSRequestorAuthenticationInfo', '2.1.0', 'Table B.1', 'Container of prior authentication data. Object in v2.1.0/v2.2.0; array of objects from v2.3.1.', { typeChanged: true }),
   emvco('threeDSRequestorChallengeInd', '2.1.0', 'Table B.1', '3DS Requestor preference for challenge. String in v2.1.0/v2.2.0; array of strings from v2.3.1.', { typeChanged: true }),
@@ -332,6 +332,7 @@ export const RRes_FIELDS: FieldProvenance[] = [
   emvco('messageType', '2.1.0', 'Table B.9', 'Discriminator for the message type.'),
   emvco('messageVersion', '2.1.0', 'Table B.9', 'Protocol version in effect.'),
   emvco('resultsStatus', '2.1.0', 'Table B.9', 'How the 3DS Server handled the RReq: 01 (received), 02 (opt-out), 03 (not received), 04 (decoupled).'),
+  emvco('sdkTransID', '2.1.0', 'Table B.9', 'SDK Transaction ID when the transaction originated on the app channel.'),
   emvco('threeDSServerTransID', '2.1.0', 'Table B.9', 'Echoed 3DS Server Transaction ID.'),
 ];
 
@@ -358,30 +359,32 @@ export const Erro_FIELDS: FieldProvenance[] = [
   emvco('threeDSServerTransID', '2.1.0', 'Table A.10', 'Echoed 3DS Server Transaction ID when known.'),
 ];
 
-/** Field provenance for the OReq message (App channel only; added in v2.3.0). */
+/** Field provenance for the OReq message. */
 export const OReq_FIELDS: FieldProvenance[] = [
+  emvco('dsReferenceNumber', '2.3.1', 'Table B.10', 'DS reference number assigned at certification; identifies the originating DS.'),
+  emvco('dsTransID', '2.3.1', 'Table B.10', 'DS-issued transaction identifier for the operation-message exchange.'),
   emvco('messageType', '2.3.1', 'Table B.10', 'Discriminator for the message type.'),
   emvco('messageVersion', '2.3.1', 'Table B.10', 'Protocol version in effect.'),
-  emvco('sdkTransID', '2.3.1', 'Table B.10', 'SDK Transaction ID (the OReq always originates in the app).'),
-  emvco('threeDSServerTransID', '2.3.1', 'Table B.10', 'Echoed 3DS Server Transaction ID.'),
+  emvco('messageExtension', '2.3.1', 'Table B.10', 'Optional extension list.'),
+  emvco('opCategory', '2.3.1', 'Table B.10', 'Category of operational information being communicated.'),
+  emvco('opDescription', '2.3.1', 'Table B.10', 'Human-readable description of the operational communication.'),
+  emvco('opExpDate', '2.3.1', 'Table B.10', 'Date after which the operational information is no longer relevant.'),
+  emvco('opPriorTransRef', '2.3.1', 'Table B.10', 'Reference to prior transaction identifiers relevant to the operational notice.'),
+  emvco('opSeq', '2.3.1', 'Table B.10', 'Sequence metadata for a single OReq or a multi-message OReq sequence.'),
+  emvco('opSeverity', '2.3.1', 'Table B.10', 'Severity level of the operational communication.'),
 ];
 
-/** Field provenance for the ORes message (App channel only; added in v2.3.0). */
+/** Field provenance for the ORes message. */
 export const ORes_FIELDS: FieldProvenance[] = [
-  emvco('acsTransID', '2.3.1', 'Table B.11', 'ACS Transaction ID when known.'),
-  emvco('authenticationValue', '2.3.1', 'Table B.11', 'Cryptographic proof of authentication when the result is Y.'),
-  emvco('eci', '2.3.1', 'Table B.11', 'Electronic Commerce Indicator.'),
-  emvco('errorCode', '2.3.1', 'Table B.11', 'Error code if the ORes carries an error.'),
-  emvco('errorDescription', '2.3.1', 'Table B.11', 'Human-readable description of the errorCode.'),
-  emvco('errorDetail', '2.3.1', 'Table B.11', 'Optional implementation-specific detail.'),
-  emvco('errorMessageType', '2.3.1', 'Table B.11', 'The original messageType the error refers to.'),
+  emvco('threeDSServerRefNumber', '2.3.1', 'Table B.11', '3DS Server reference number when the OReq recipient is a 3DS Server.'),
+  emvco('threeDSServerTransID', '2.3.1', 'Table B.11', '3DS Server transaction ID when the OReq recipient is a 3DS Server.'),
+  emvco('acsReferenceNumber', '2.3.1', 'Table B.11', 'ACS reference number when the OReq recipient is an ACS.'),
+  emvco('acsTransID', '2.3.1', 'Table B.11', 'ACS transaction ID when the OReq recipient is an ACS.'),
+  emvco('dsTransID', '2.3.1', 'Table B.11', 'Echoed DS transaction ID from the OReq message.'),
   emvco('messageExtension', '2.3.1', 'Table B.11', 'Optional extension list.'),
   emvco('messageType', '2.3.1', 'Table B.11', 'Discriminator for the message type.'),
   emvco('messageVersion', '2.3.1', 'Table B.11', 'Protocol version in effect.'),
-  emvco('sdkTransID', '2.3.1', 'Table B.11', 'Echoed SDK Transaction ID.'),
-  emvco('threeDSServerTransID', '2.3.1', 'Table B.11', 'Echoed 3DS Server Transaction ID.'),
-  emvco('transStatus', '2.3.1', 'Table B.11', 'Out-of-band authentication result.'),
-  emvco('transStatusReason', '2.3.1', 'Table B.11', 'Reason code for the transStatus.'),
+  emvco('opStatus', '2.3.1', 'Table B.11', 'Acknowledgement status for the received OReq message sequence.'),
 ];
 
 /** Lookup table for the field-provenance registry by message type. */

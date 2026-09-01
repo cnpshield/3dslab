@@ -3,6 +3,7 @@ import { serializeSnapshot, parseSnapshot } from './snapshot';
 
 const GOOD_SCENARIO = {
   protocolVersion: '2.3.1' as const,
+  deviceChannel: 'browser' as const,
   methodPath: 'executed' as const,
   dsRouting: 'normal' as const,
   transStatus: 'Y' as const,

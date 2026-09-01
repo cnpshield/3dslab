@@ -3,7 +3,7 @@
  *
  * A pragmatic, opinionated list of implementation pitfalls, with each
  * item anchored to the EMV 3-D Secure version that introduced or
- * resolved it. This page is one of the highest-leverage research
+ * resolved it. This page is one of the highest-leverage reference
  * surfaces for "EMV 3DS bugs" and "3DS implementation mistakes"
  * queries.
  */
@@ -41,9 +41,9 @@ const PITFALLS: Pitfall[] = [
     title: 'Trusting the CRes for the final authentication result',
     versionsAffected: ['2.1.0', '2.2.0', '2.3.1'],
     description:
-      'CRes only describes the *interaction* with the challenge UI (completed / not completed). The final authentication result and the `authenticationValue` come from RRes.',
+      'CRes only describes the challenge-side completion state. The authoritative final authentication result and `authenticationValue` come from `RReq`; `RRes` is only the 3DS Server acknowledgement back to the ACS.',
     detection:
-      'Trace RReq → RRes and verify that the merchant authorisation carries the `authenticationValue` from the RRes, not from the CRes.',
+      'Trace `RReq` → `RRes` and verify that merchant authorisation is keyed off the `RReq` result data, not off CRes or the presence of an `RRes` alone.',
     references: ['EMV 3DS v2.3.1 Core Spec §3.1.2.5, Table B.8 (RReq), B.9 (RRes).'],
   },
   {
@@ -116,7 +116,7 @@ export function PitfallsPage() {
           <p className="lp-eyebrow">Pitfalls</p>
           <h1>EMV 3DS implementation pitfalls</h1>
           <p className="lp-lede">
-            These are the issues I keep seeing when reviewing 3DS implementations, captures, and bug reports. Each
+            These are the issues I keep seeing when reviewing 3DS implementations, captures, and protocol traces. Each
             item is anchored to the EMVCo spec version that introduced or resolved it.
           </p>
         </header>
@@ -145,8 +145,17 @@ export function PitfallsPage() {
 
         <footer className="lp-foot">
           <p>
-            Author: Wasif Faisal, BRAC University. The pitfalls list is maintained alongside the versioned payload
-            registry. If you spot a new failure mode, file a finding via the GitHub issue templates.
+            Protocol Analysis & Specification Review by{' '}
+            <a
+              href="https://www.linkedin.com/in/cswasif/"
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontWeight: 700, color: 'var(--accent-primary)', textDecoration: 'underline' }}
+            >
+              Wasif Faisal
+            </a>{' '}
+            (BRAC University). The pitfalls list is maintained alongside the versioned payload
+            registry. If you spot a new failure mode, file an issue with the relevant protocol evidence.
           </p>
         </footer>
       </main>

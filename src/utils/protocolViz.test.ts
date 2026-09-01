@@ -13,6 +13,7 @@ describe('validateScenario', () => {
   it('accepts a fully-populated scenario', () => {
     const result = validateScenario({
       protocolVersion: '2.3.1',
+      deviceChannel: 'browser',
       methodPath: 'executed',
       dsRouting: 'normal',
       transStatus: 'Y',
@@ -39,6 +40,7 @@ describe('validateScenario', () => {
   it('flags enum values that are not in the spec', () => {
     const errors = validateScenario({
       protocolVersion: '2.3.1',
+      deviceChannel: 'browser',
       methodPath: 'executed',
       dsRouting: 'normal',
       transStatus: 'X', // not in VALID_TRANS_STATUS

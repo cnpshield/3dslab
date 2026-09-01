@@ -156,7 +156,16 @@ export function FieldsPage() {
 
         <footer className="lp-foot">
           <p>
-            Author: Wasif Faisal, BRAC University. The data shown here is generated live from{' '}
+            Protocol Research & Data Dictionary Architecture by{' '}
+            <a
+              href="https://www.linkedin.com/in/cswasif/"
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontWeight: 700, color: 'var(--accent-primary)', textDecoration: 'underline' }}
+            >
+              Wasif Faisal
+            </a>{' '}
+            (BRAC University). The data shown here is generated live from{' '}
             <code>src/data/payloads/meta/fieldProvenance.ts</code>; v2.3.1 is anchored to Tables B.1–B.11 of the EMV
             3DS v2.3.1 Core Spec, and v2.1.0 / v2.2.0 fields are sourced from the 3dsecure.io re-typeset and labelled
             non-authoritative.

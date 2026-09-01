@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
-import { Copy, Check, ExternalLink, Eye, EyeOff, EyeClosed, Clock, Lightbulb, User, Server, Network, Building2, BookOpen, Shield, AlertTriangle, ArrowRight, ArrowLeft, Key, Lock, CheckCircle2, XCircle, FileCode, Layers, Zap, MapPin, Terminal, ClipboardPaste, FileWarning, ChevronDown, ChevronUp, FlaskConical } from 'lucide-react';
+import { Copy, Check, ExternalLink, Eye, EyeOff, EyeClosed, Clock, Lightbulb, User, Server, Network, Building2, BookOpen, Shield, AlertTriangle, ArrowRight, ArrowLeft, Key, Lock, CheckCircle2, XCircle, FileCode, Layers, Zap, MapPin, Terminal, ClipboardPaste, FileWarning, ChevronDown, ChevronUp, ChevronLeft, FlaskConical } from 'lucide-react';
 import type { FlowStep, Scenario, UserVisibility, StepGroupMeta, StepGroupId, ParticipantId, SecurityLensNote } from '../types';
-import { PARTICIPANTS, FLOW_STEPS, STEP_GROUPS, DOMAIN_OVERVIEWS, PARTICIPANT_OVERVIEWS, STEP_GROUP_OVERVIEWS, GLOSSARY, SECURITY_LENS_BY_STEP, inferRiskLevelForStep } from '../data/flowData';
+import { FLOW_STEPS, STEP_GROUPS, DOMAIN_OVERVIEWS, STEP_GROUP_OVERVIEWS, GLOSSARY, SECURITY_LENS_BY_STEP, getParticipantOverviewsForScenario, getParticipantsForScenario, inferRiskLevelForStep } from '../data/flowData';
 import { JsonHighlighter } from './JsonHighlighter';
 import { validate3dsMessage, toCurl, decodeJws } from '../utils/jwsValidator';
 import type { ValidationIssue, Severity } from '../utils/jwsValidator';
 import { extractPayloadFields, getDynamicPayload } from '../utils/protocolViz';
+import { getPayloadTransStatus, getTransStatusReasonLabel } from '../utils/transStatus';
 
 export type DetailsContext =
   | { kind: 'step'; stepId: string }
@@ -122,8 +123,18 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
     }
   }, [securityLensEnabled, activeTab]);
 
-  const sourceParticipant = PARTICIPANTS.find(p => p.id === step.source);
-  const targetParticipant = PARTICIPANTS.find(p => p.id === step.target);
+  const scenarioParticipants = useMemo(
+    () => getParticipantsForScenario(scenario),
+    [scenario]
+  );
+
+  const scenarioParticipantOverviews = useMemo(
+    () => getParticipantOverviewsForScenario(scenario),
+    [scenario]
+  );
+
+  const sourceParticipant = scenarioParticipants.find(p => p.id === step.source);
+  const targetParticipant = scenarioParticipants.find(p => p.id === step.target);
 
   const groupMeta: StepGroupMeta | undefined = useMemo(
     () => (step.groupId ? STEP_GROUPS.find(g => g.id === step.groupId) : undefined),
@@ -141,11 +152,12 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
   const VisibilityIcon = visibilityMeta.icon;
 
   const dynamicPayload = getDynamicPayload(step, scenario);
-  const effectiveTransStatus = scenario.transStatus === 'C'
-    ? (step.groupId === 'results' || step.groupId === 'completion'
-      ? (scenario.challengeOutcome === 'success' ? 'Y' : scenario.challengeOutcome === 'decoupled' ? 'D' : 'N')
-      : 'C')
-    : scenario.transStatus;
+  const effectiveTransStatus = getPayloadTransStatus(step, scenario);
+  const effectiveTransStatusReason =
+    typeof dynamicPayload?.transStatusReason === 'string' && dynamicPayload.transStatusReason
+      ? dynamicPayload.transStatusReason
+      : '';
+  const effectiveTransStatusReasonLabel = getTransStatusReasonLabel(effectiveTransStatusReason);
 
   const securityLensNote: SecurityLensNote | null = useMemo(() => {
     const direct = SECURITY_LENS_BY_STEP[step.id];
@@ -156,7 +168,11 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
 
     const scenarioSpecificChecks: string[] = [];
     if (scenario.transStatus === 'C') {
-      scenarioSpecificChecks.push('Validate that browser-facing challenge behavior stays consistent with the server-side results loop.');
+      scenarioSpecificChecks.push(
+        scenario.deviceChannel === 'app'
+          ? 'Validate that SDK-facing challenge behavior stays consistent with the server-side results loop.'
+          : 'Validate that browser-facing challenge behavior stays consistent with the server-side results loop.'
+      );
     }
     if (scenario.challengeOutcome === 'invalid_cres') {
       scenarioSpecificChecks.push('Confirm invalid CRes handling terminates 3DS rather than falling through into success-oriented checkout logic.');
@@ -173,7 +189,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
       reportingAngle: `Useful for phase-level analysis of ${groupOverview.title.toLowerCase()} when no step-specific note is defined.`,
       specHooks: [groupOverview.specSection]
     };
-  }, [step.id, step.groupId, scenario.transStatus, scenario.challengeOutcome]);
+  }, [step.id, step.groupId, scenario.transStatus, scenario.challengeOutcome, scenario.deviceChannel]);
 
   const enrichedSecurityLensNote: SecurityLensNote | null = useMemo(() => {
     if (!securityLensNote) return null;
@@ -182,7 +198,11 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
       inferRiskLevelForStep(step.id, securityLensNote.riskLevel);
 
     const inferredAttackers = securityLensNote.attackerPositions || uniq([
-      step.groupId === 'challenge' || step.groupId === 'method' ? 'Browser / merchant page surface' : undefined,
+      step.groupId === 'challenge' || step.groupId === 'method'
+        ? (scenario.deviceChannel === 'app'
+          ? '3DS SDK / requestor app surface'
+          : 'Browser / merchant page surface')
+        : undefined,
       step.groupId === 'results' || step.groupId === 'completion' ? 'Merchant callback / server-side result handler' : undefined,
       step.source === 'S' || step.target === 'S' ? '3DS Server integration surface' : undefined,
       step.source === 'DS' || step.target === 'DS' ? 'Directory Server forwarding / validation boundary' : undefined,
@@ -194,7 +214,11 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
       scenario.transStatus === 'C' ? 'Challenge-capable branch is active (`transStatus = C`).' : undefined,
       scenario.transStatus === 'D' ? 'Direct decoupled branch is active (`transStatus = D`).' : undefined,
       step.groupId === 'results' || step.groupId === 'completion' ? 'A prior protocol step has already established transaction identifiers and branch state.' : undefined,
-      step.groupId === 'challenge' ? 'Browser challenge transport and issuer render path are reachable.' : undefined,
+      step.groupId === 'challenge'
+        ? (scenario.deviceChannel === 'app'
+          ? 'SDK challenge transport and issuer render path are reachable.'
+          : 'Browser challenge transport and issuer render path are reachable.')
+        : undefined,
     ]);
 
     const payloadFields = extractPayloadFields(step.payload);
@@ -203,8 +227,10 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
       step.groupId === 'ares' || step.groupId === 'acs_decision' ? 'transStatus' : undefined,
       step.groupId === 'ares' ? 'acsChallengeMandated' : undefined,
       step.groupId === 'ares' && (scenario.transStatus === 'D' || step.id === 'step_10d') ? 'acsDecConInd' : undefined,
-      step.groupId === 'challenge' ? 'threeDSRequestorURL' : undefined,
-      step.groupId === 'challenge' ? 'threeDSSessionData' : undefined,
+      step.groupId === 'challenge' && scenario.deviceChannel === 'app' ? 'sdkTransID' : undefined,
+      step.groupId === 'challenge' && scenario.deviceChannel === 'app' ? 'threeDSRequestorAppURL' : undefined,
+      step.groupId === 'challenge' && scenario.deviceChannel !== 'app' ? 'threeDSRequestorURL' : undefined,
+      step.groupId === 'challenge' && scenario.deviceChannel !== 'app' ? 'threeDSSessionData' : undefined,
       step.groupId === 'results' ? 'resultsStatus' : undefined,
       step.groupId === 'results' || step.groupId === 'completion' ? 'threeDSServerTransID' : undefined,
       step.groupId === 'results' || step.groupId === 'completion' ? 'acsTransID' : undefined,
@@ -213,13 +239,19 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
     const inferredEvidence = securityLensNote.evidenceToCollect || uniq([
       ...securityLensNote.observables.map((item) => `Capture evidence for: ${item}`),
       step.payload ? 'Save the rendered payload or its decoded form alongside timestamps.' : undefined,
-      step.groupId === 'challenge' || step.groupId === 'method' ? 'Record browser network traces and DOM/iframe lifecycle events.' : undefined,
+      step.groupId === 'challenge' || step.groupId === 'method'
+        ? (scenario.deviceChannel === 'app'
+          ? 'Record requestor-app logs, SDK callbacks, and any native/web bridge lifecycle events.'
+          : 'Record browser network traces and DOM/iframe lifecycle events.')
+        : undefined,
       step.groupId === 'results' || step.groupId === 'completion' ? 'Preserve server-side logs showing how callback/result data was validated and consumed.' : undefined,
     ]);
 
     const inferredGuards = securityLensNote.falsePositiveGuards || uniq([
       step.groupId === 'completion' ? 'Confirm the claimed issue changes trust or authorization behavior, not just cosmetic UI state.' : undefined,
-      step.groupId === 'results' ? 'Compare browser-visible state with the authoritative RReq/RRes path before calling it a protocol break.' : undefined,
+      step.groupId === 'results'
+        ? 'Compare requestor-visible state with the authoritative RReq/RRes path before calling it a protocol break.'
+        : undefined,
       scenario.challengeOutcome === 'optout' ? 'Do not call opt-out a bypass unless challenge policy inputs should have forbidden it.' : undefined,
       scenario.transStatus === 'D' ? 'A pending decoupled state is expected; the defect is early success, silent expiry, or incorrect branch handling.' : undefined,
       'Distinguish protocol failure from issuer business decline or expected negative authentication outcomes.',
@@ -227,7 +259,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
 
     const inferredImpact = securityLensNote.impactIfBroken
       || (step.id === 'step_22_invalid'
-        ? 'A forged, stale, or malformed browser completion could still influence merchant authorization decisions.'
+        ? 'A forged, stale, or malformed challenge completion could still influence merchant authorization decisions.'
         : step.groupId === 'challenge'
           ? 'Challenge state could be skipped, replayed, or desynchronized, weakening issuer-controlled authentication.'
           : step.groupId === 'results' || step.groupId === 'completion'
@@ -245,7 +277,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
       impactIfBroken: inferredImpact,
       specHooks: securityLensNote.specHooks?.map(normalizeSpecHook),
     };
-  }, [securityLensNote, step.id, step.groupId, step.source, step.target, step.payload, scenario.transStatus, scenario.challengeOutcome]);
+  }, [securityLensNote, step.id, step.groupId, step.source, step.target, step.payload, scenario.transStatus, scenario.challengeOutcome, scenario.deviceChannel]);
 
   const handleCopy = () => {
     if (!dynamicPayload) return;
@@ -382,7 +414,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
     </>
   );
 
-  const renderParticipantView = (p: typeof PARTICIPANT_OVERVIEWS[0]) => (
+  const renderParticipantView = (p: (typeof scenarioParticipantOverviews)[number]) => (
     <>
       <div className="context-banner" style={{ background: `${p.color}10`, border: `1px solid ${p.color}40`, borderLeft: `4px solid ${p.color}`, borderRadius: '6px', padding: '10px 12px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
         <Network size={18} style={{ color: p.color, flexShrink: 0, marginTop: '2px' }} />
@@ -524,7 +556,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
         <div>
           <div style={{ fontSize: '9.5px', fontWeight: '800', color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Reference</div>
           <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', marginTop: '1px' }}>3DS Glossary & Spec Index</div>
-          <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', marginTop: '2px', fontStyle: 'italic' }}>Every term a researcher needs, with spec section references.</div>
+          <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', marginTop: '2px', fontStyle: 'italic' }}>Key protocol terms with spec section references.</div>
         </div>
       </div>
 
@@ -550,71 +582,194 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
 
   const renderHeader = () => {
     if (!isStepContext) return null;
+    const sourceColor = sourceParticipant ? sourceParticipant.stroke : 'var(--accent-primary)';
+    
+    // Short group tag to prevent badge truncation in sidebar
+    const SHORT_GROUP_TITLES: Partial<Record<StepGroupId, string>> = {
+      preauth: 'Pre-Auth',
+      setup: 'Setup',
+      method: 'Method',
+      areq: 'AReq',
+      ds_validation: 'DS Validate',
+      acs_decision: 'ACS Decision',
+      ares: 'ARes',
+      challenge: 'Challenge',
+      results: 'Results (RReq)',
+      completion: 'Completion'
+    };
+    const shortGroupTitle = groupMeta ? (SHORT_GROUP_TITLES[groupMeta.id] || groupMeta.title.split('—')[0].trim()) : '';
+
     return (
-      <div className="details-header" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
-        <div className="details-meta" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '4px' }}>
-          <span className="details-step-badge" style={{ fontSize: '10px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', padding: '2px 6px', borderRadius: '4px', fontWeight: '700', color: 'var(--text-secondary)' }}>
-            Step {step.num}
+      <div className="details-header" style={{
+        background: 'var(--bg-secondary)',
+        padding: '12px 14px',
+        borderRadius: '10px',
+        border: '1px solid var(--border-color)',
+        boxShadow: 'var(--shadow-sm)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        flexShrink: 0
+      }}>
+        <div className="details-meta" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span className="details-step-badge" style={{
+            fontSize: '10.5px',
+            background: `${sourceColor}18`,
+            border: `1.5px solid ${sourceColor}55`,
+            padding: '2px 8px',
+            borderRadius: '6px',
+            fontWeight: '800',
+            color: sourceColor,
+            letterSpacing: '0.03em',
+            fontFamily: 'JetBrains Mono, monospace'
+          }}>
+            STEP {step.num}
           </span>
           {groupMeta && (
             <button
               onClick={() => onShowGroup(groupMeta.id)}
               title={groupMeta.description}
               className="badge-button"
-              style={{ fontSize: '9.5px', padding: '2px 6px', borderRadius: '4px', fontWeight: '700', color: '#fff', background: groupMeta.color, letterSpacing: '0.03em', textTransform: 'uppercase', border: 'none', cursor: 'pointer' }}
+              style={{
+                fontSize: '9.5px',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                fontWeight: '700',
+                color: '#fff',
+                background: groupMeta.color,
+                letterSpacing: '0.03em',
+                textTransform: 'uppercase',
+                border: 'none',
+                cursor: 'pointer'
+              }}
             >
-              {groupMeta.title.split('—')[0].trim()}
+              {shortGroupTitle}
             </button>
           )}
           <span
             className="details-visibility-badge"
             title={visibilityMeta.description}
-            style={{ fontSize: '9.5px', padding: '2px 6px', borderRadius: '4px', fontWeight: '700', color: visibilityMeta.color, background: `${visibilityMeta.color}15`, border: `1px solid ${visibilityMeta.color}40`, display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+            style={{
+              fontSize: '9.5px',
+              padding: '2px 7px',
+              borderRadius: '6px',
+              fontWeight: '700',
+              color: visibilityMeta.color,
+              background: `${visibilityMeta.color}15`,
+              border: `1px solid ${visibilityMeta.color}40`,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
           >
-            <VisibilityIcon size={10} />
+            <VisibilityIcon size={11} />
             {visibilityMeta.label}
           </span>
           {step.approxTime && (
-            <span className="details-time-badge" style={{ fontSize: '9.5px', padding: '2px 6px', borderRadius: '4px', fontWeight: '600', color: 'var(--text-muted)', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+            <span className="details-time-badge" style={{
+              fontSize: '9.5px',
+              padding: '2px 7px',
+              borderRadius: '6px',
+              fontWeight: '600',
+              color: 'var(--text-muted)',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-color)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              marginLeft: 'auto'
+            }}>
               <Clock size={10} />
               {step.approxTime}
             </span>
           )}
         </div>
-        <h2 className="details-title" style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)', margin: '4px 0 8px 0' }}>{step.label}</h2>
 
-        <div className="flow-direction" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+        <h2 className="details-title" style={{
+          fontSize: '15px',
+          fontWeight: '800',
+          color: 'var(--text-primary)',
+          margin: 0,
+          lineHeight: 1.35
+        }}>
+          {step.label}
+        </h2>
+
+        <div className="flow-direction" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          paddingTop: '6px',
+          borderTop: '1px solid var(--border-color)',
+          flexWrap: 'wrap'
+        }}>
           {sourceParticipant ? (
             <button
               onClick={() => onShowParticipant(sourceParticipant.id)}
               className="badge-button"
-              style={{ fontSize: '11px', color: sourceParticipant.stroke, fontWeight: '700', padding: '2px 8px', background: `${sourceParticipant.stroke}15`, borderRadius: '4px', border: `1px solid ${sourceParticipant.stroke}40`, cursor: 'pointer' }}
+              style={{
+                fontSize: '11px',
+                color: sourceParticipant.stroke,
+                fontWeight: '700',
+                padding: '2px 8px',
+                background: `${sourceParticipant.stroke}18`,
+                borderRadius: '6px',
+                border: `1px solid ${sourceParticipant.stroke}45`,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}
               title={`View ${sourceParticipant.fullName} profile`}
             >
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: sourceParticipant.stroke }} />
               {sourceParticipant.name}
             </button>
           ) : (
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '2px 8px', background: 'var(--bg-tertiary)', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '2px 8px', background: 'var(--bg-tertiary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
               Internal Step
             </div>
           )}
 
           {targetParticipant && (
             <>
-              <div style={{ color: 'var(--text-muted)', fontSize: '10px' }}>→</div>
+              <ArrowRight size={12} style={{ color: 'var(--text-muted)' }} />
               <button
                 onClick={() => onShowParticipant(targetParticipant.id)}
                 className="badge-button"
-                style={{ fontSize: '11px', color: targetParticipant.stroke, fontWeight: '700', padding: '2px 8px', background: `${targetParticipant.stroke}15`, borderRadius: '4px', border: `1px solid ${targetParticipant.stroke}40`, cursor: 'pointer' }}
+                style={{
+                  fontSize: '11px',
+                  color: targetParticipant.stroke,
+                  fontWeight: '700',
+                  padding: '2px 8px',
+                  background: `${targetParticipant.stroke}18`,
+                  borderRadius: '6px',
+                  border: `1px solid ${targetParticipant.stroke}45`,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}
                 title={`View ${targetParticipant.fullName} profile`}
               >
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: targetParticipant.stroke }} />
                 {targetParticipant.name}
               </button>
             </>
           )}
 
           {step.specRef && (
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '500', marginLeft: 'auto', fontFamily: 'JetBrains Mono' }}>
+            <span style={{
+              fontSize: '9.5px',
+              color: 'var(--text-muted)',
+              fontWeight: '600',
+              marginLeft: 'auto',
+              fontFamily: 'JetBrains Mono, monospace',
+              background: 'var(--bg-tertiary)',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              border: '1px solid var(--border-color)'
+            }}>
               {step.specRef}
             </span>
           )}
@@ -624,15 +779,54 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
   };
 
   return (
-    <div className="details-panel" style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div className="details-panel" style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '10px', overflow: 'hidden' }}>
+      {/* Return to Step link for non-step contexts */}
+      {!isStepContext && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '6px 10px',
+          background: 'var(--bg-secondary)',
+          borderRadius: '8px',
+          border: '1px solid var(--border-color)',
+          flexShrink: 0
+        }}>
+          <button
+            onClick={() => onShowStep(step?.id || 'step_0A')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              fontSize: '11px',
+              fontWeight: '700',
+              color: 'var(--accent-primary)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <ChevronLeft size={13} /> Back to Step {step?.num || ''}
+          </button>
+          <span style={{
+            fontSize: '9.5px',
+            color: 'var(--text-muted)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            fontWeight: 700
+          }}>
+            {context.kind} view
+          </span>
+        </div>
+      )}
+
       {renderHeader()}
 
       {isStepContext && (
-        <div className="details-tabs" style={{ display: 'flex', background: 'var(--bg-tertiary)', padding: '3px', borderRadius: '6px', gap: '4px' }}>
+        <div className="details-tabs">
           <button
             onClick={() => setActiveTab('overview')}
             className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-            style={{ flex: 1, border: 'none', background: activeTab === 'overview' ? 'var(--bg-secondary)' : 'transparent', color: activeTab === 'overview' ? 'var(--text-primary)' : 'var(--text-secondary)', padding: '6px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s ease', boxShadow: activeTab === 'overview' ? 'var(--shadow-sm)' : 'none' }}
           >
             Overview
           </button>
@@ -640,25 +834,23 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
             onClick={() => setActiveTab('payload')}
             className={`tab-btn ${activeTab === 'payload' ? 'active' : ''}`}
             disabled={!step.payload}
-            style={{ flex: 1, border: 'none', background: activeTab === 'payload' ? 'var(--bg-secondary)' : 'transparent', color: activeTab === 'payload' ? 'var(--text-primary)' : 'var(--text-secondary)', padding: '6px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', cursor: step.payload ? 'pointer' : 'not-allowed', opacity: step.payload ? 1 : 0.4, transition: 'all 0.15s ease', boxShadow: activeTab === 'payload' ? 'var(--shadow-sm)' : 'none' }}
           >
-            Protocol Data
+            Protocol Data {step.payloadType === 'form' ? '(Form)' : '(JSON)'}
           </button>
           {securityLensEnabled && (
             <button
               onClick={() => setActiveTab('security')}
               className={`tab-btn ${activeTab === 'security' ? 'active' : ''}`}
-              style={{ flex: 1, border: 'none', background: activeTab === 'security' ? 'var(--bg-secondary)' : 'transparent', color: activeTab === 'security' ? 'var(--text-primary)' : 'var(--text-secondary)', padding: '6px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.15s ease', boxShadow: activeTab === 'security' ? 'var(--shadow-sm)' : 'none' }}
             >
-              Research Lens
+              Security Lens
             </button>
           )}
         </div>
       )}
 
-      <div className="details-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="details-content" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {isStepContext && activeTab === 'overview' && (
-          <div className="tab-pane fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto' }}>
+          <div className="tab-pane fade-in" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', paddingRight: '4px' }}>
             <p className="step-explanation" style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.55, margin: 0 }}>{step.detail}</p>
 
             {step.userExperience && (
@@ -702,10 +894,14 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
                 <div className="details-key-value-card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: '800' }}>
                     <code style={{ color: 'var(--accent-primary)', fontFamily: 'JetBrains Mono' }}>deviceChannel</code>
-                    <span style={{ color: 'var(--text-primary)', fontWeight: '800', fontSize: '10.5px' }}>02 (Browser)</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: '800', fontSize: '10.5px' }}>
+                      {scenario.deviceChannel === 'app' ? '01 (App / SDK)' : '02 (Browser)'}
+                    </span>
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4, marginTop: '2px' }}>
-                    Always set to <code>02</code> for browser-based 3DS. (Use <code>01</code> for App-based / SDK flows.)
+                    {scenario.deviceChannel === 'app'
+                      ? <>This scenario is modeling the app / SDK channel, so the AReq-family payloads use <code>01</code> and surface SDK correlation fields such as <code>sdkTransID</code>.</>
+                      : <>This scenario is modeling the browser channel, so the AReq-family payloads use <code>02</code> and carry browser telemetry fields.</>}
                   </div>
                 </div>
                 <div className="details-key-value-card">
@@ -741,6 +937,19 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
                     </div>
                   </div>
                 ) : null}
+                {effectiveTransStatusReason ? (
+                  <div className="details-key-value-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: '800' }}>
+                      <code style={{ color: 'var(--accent-primary)', fontFamily: 'JetBrains Mono' }}>transStatusReason</code>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: '800', fontSize: '10.5px' }}>
+                        {effectiveTransStatusReason}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4, marginTop: '2px' }}>
+                      {effectiveTransStatusReasonLabel || 'Synthetic lab mapping for the current transaction status branch.'}
+                    </div>
+                  </div>
+                ) : null}
                 {scenario.transStatus === 'C' ? (
                   <>
                     <div className="details-key-value-card">
@@ -749,7 +958,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
                         <span style={{ color: 'var(--text-primary)', fontWeight: '800', fontSize: '10.5px' }}>{scenario.challengePreference}</span>
                       </div>
                       <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4, marginTop: '2px' }}>
-                        Merchant / 3DS Server challenge preference in the AReq. In this browser model: <strong>01</strong>=No preference, <strong>02</strong>=No challenge requested, <strong>03</strong>=Challenge requested, <strong>04</strong>=Challenge mandated by the requestor.
+                        Merchant / 3DS Server challenge preference in the AReq. In this scenario: <strong>01</strong>=No preference, <strong>02</strong>=No challenge requested, <strong>03</strong>=Challenge requested, <strong>04</strong>=Challenge mandated by the requestor. The selected <code>deviceChannel</code> changes the transport, not the indicator meaning.
                       </div>
                     </div>
                     <div className="details-key-value-card">
@@ -758,7 +967,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
                         <span style={{ color: 'var(--text-primary)', fontWeight: '800', fontSize: '10.5px' }}>{scenario.challengeMandated}</span>
                       </div>
                       <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4, marginTop: '2px' }}>
-                        ARes flag indicating whether the ACS requires the challenge for local/regional mandates. The 3DS Requestor still evaluates it together with the 3DS Requestor Challenge Indicator and ACS Rendering Type ([Req 117] ¶4), and may opt out regardless by emitting <code>resultsStatus = 02</code>.
+                        ARes flag indicating whether the ACS requires the challenge for local/regional mandates. The 3DS Requestor still evaluates it together with the 3DS Requestor Challenge Indicator and ACS Rendering Type ([Req 117] ¶4). In this simulator, the opt-out branch is only enabled when neither the ACS nor the requestor mandated the challenge, and the closing <code>RRes</code> carries <code>resultsStatus = 02</code>.
                       </div>
                     </div>
                   </>
@@ -832,7 +1041,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
         )}
 
         {isStepContext && activeTab === 'payload' && dynamicPayload && (
-          <div className="tab-pane fade-in payload-pane" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div className="tab-pane fade-in payload-pane" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', paddingRight: '4px' }}>
             {/* Synthetic payload watermark (audit §4.2). Every payload
                 rendered by the lab is fabricated for visualization.
                 Without this chip, a screenshot of the lab could be
@@ -1150,11 +1359,11 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
         )}
 
         {isStepContext && activeTab === 'security' && securityLensEnabled && enrichedSecurityLensNote && (
-          <div className="tab-pane fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto' }}>
+          <div className="tab-pane fade-in" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', paddingRight: '4px' }}>
             <div className="context-banner" style={{ background: 'var(--accent-secondary-bg-trans)', border: '1px solid var(--accent-secondary-border-trans)', borderLeft: '4px solid var(--accent-secondary)', borderRadius: '6px', padding: '10px 12px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
               <Shield size={18} style={{ color: 'var(--accent-secondary)', flexShrink: 0, marginTop: '2px' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '9.5px', fontWeight: '800', color: 'var(--accent-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Security Research Lens</div>
+                <div style={{ fontSize: '9.5px', fontWeight: '800', color: 'var(--accent-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Security Lens</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
                   {enrichedSecurityLensNote.riskLevel && (
                     <Pill color={RISK_META[enrichedSecurityLensNote.riskLevel].color} bg={RISK_META[enrichedSecurityLensNote.riskLevel].bg}>
@@ -1214,7 +1423,7 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
             </div>
 
             <div className="content-card">
-              <SectionHeader icon={Eye} title="What To Observe" color="#60a5fa" subtitle="Signals to watch in browser, logs, or protocol traces" />
+              <SectionHeader icon={Eye} title="What To Observe" color="#60a5fa" subtitle="Signals to watch in the requestor surface, logs, or protocol traces" />
               <BulletList items={enrichedSecurityLensNote.observables} />
             </div>
 
@@ -1260,16 +1469,16 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
         {isDomainContext && (() => {
           const domain = DOMAIN_OVERVIEWS.find(d => d.id === context.domainId);
           return domain ? (
-            <div className="tab-pane fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto' }}>
+            <div className="tab-pane fade-in" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', paddingRight: '4px' }}>
               {renderDomainView(domain)}
             </div>
           ) : null;
         })()}
 
         {isParticipantContext && (() => {
-          const p = PARTICIPANT_OVERVIEWS.find(p => p.id === context.participantId);
+          const p = scenarioParticipantOverviews.find(p => p.id === context.participantId);
           return p ? (
-            <div className="tab-pane fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto' }}>
+            <div className="tab-pane fade-in" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', paddingRight: '4px' }}>
               {renderParticipantView(p)}
             </div>
           ) : null;
@@ -1278,14 +1487,14 @@ export const DetailsPanel: React.FC<DetailsPanelProps> = memo(({ step, scenario,
         {isGroupContext && (() => {
           const g = STEP_GROUP_OVERVIEWS.find(g => g.id === context.groupId);
           return g ? (
-            <div className="tab-pane fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto' }}>
+            <div className="tab-pane fade-in" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', paddingRight: '4px' }}>
               {renderGroupView(g)}
             </div>
           ) : null;
         })()}
 
         {isGlossaryContext && (
-          <div className="tab-pane fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto' }}>
+          <div className="tab-pane fade-in" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', paddingRight: '4px' }}>
             {renderGlossaryView()}
           </div>
         )}

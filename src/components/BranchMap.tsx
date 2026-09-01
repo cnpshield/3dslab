@@ -47,7 +47,7 @@ export const BranchMap: React.FC<BranchMapProps> = memo(({
         : scenario.challengeOutcome === 'decoupled'
           ? 'Challenge pivots to decoupled authentication'
           : scenario.challengeOutcome === 'invalid_cres'
-            ? 'Requestor rejects invalid browser completion'
+            ? 'Requestor rejects invalid completion artifact'
             : scenario.challengeOutcome === 'optout'
               ? 'Requestor locally opts out of the challenge'
               : 'Challenge drives a negative or error outcome'
@@ -59,7 +59,7 @@ export const BranchMap: React.FC<BranchMapProps> = memo(({
     {
       id: 'frictionless',
       title: 'Frictionless / direct ARes',
-      description: 'ARes closes the transaction without a visible browser challenge.',
+      description: 'ARes closes the transaction without a visible challenge surface or a CReq/CRes and RReq/RRes loop.',
       active: branchMeta.lane === 'frictionless',
       accent: '#10b981',
     },
@@ -73,7 +73,7 @@ export const BranchMap: React.FC<BranchMapProps> = memo(({
     {
       id: 'decoupled',
       title: 'Async / decoupled',
-      description: 'Issuer-controlled waiting branch that resolves through RReq rather than browser immediacy.',
+      description: 'Issuer-controlled waiting branch that resolves through RReq rather than immediate UI completion.',
       active: branchMeta.lane === 'decoupled',
       accent: '#38bdf8',
     },
@@ -177,7 +177,7 @@ export const BranchMap: React.FC<BranchMapProps> = memo(({
 
           <div className="branch-map-column-title branch-map-column-title-secondary">
             <TimerReset size={13} aria-hidden="true" />
-            Browser + result closure
+            Challenge + result closure
           </div>
           {BRANCH_GROUPS.map((groupId) => {
             const meta = STEP_GROUPS.find((group) => group.id === groupId);

@@ -66,6 +66,7 @@ export function computeSequenceDigest(
   // is stable across field-order changes.
   return [
     `t=${scenario.transStatus}`,
+    `dc=${scenario.deviceChannel}`,
     `m=${scenario.methodPath}`,
     `r=${scenario.dsRouting}`,
     `e=${scenario.errorPath}`,
@@ -87,6 +88,7 @@ function deriveActiveGroupIds(activeSteps: FlowStep[]): StepGroupId[] {
 
 const DEFAULT_SCENARIO: Scenario = {
   protocolVersion: '2.3.1',
+  deviceChannel: 'browser',
   methodPath: 'executed',
   dsRouting: 'normal',
   transStatus: 'Y',

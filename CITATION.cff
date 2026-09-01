@@ -1,7 +1,8 @@
 cff-version: 1.2.0
 title: EMV 3-D Secure Protocol Lab
 message: >-
-  If you use this lab in academic research, please cite the canonical
+  If you use this lab in academic work, protocol analysis, or
+  implementation review, please cite the canonical
   repository (this one) and the EMVCo 3-D Secure Core Specification that
   the lab's wire shapes are anchored to. The lab ships a v2.3.1 payload
   registry with field-level provenance; v2.1.0 / v2.2.0 data is sourced
@@ -28,7 +29,7 @@ authors:
     affiliation: BRAC University
 preferred-citation:
   type: misc
-  title: EMV 3-D Secure Protocol Lab — research artifact
+  title: EMV 3-D Secure Protocol Lab — reference tool
   authors:
     - family-names: Wasif
       given-names: Faisal

@@ -7,6 +7,7 @@
 
 import type { FlowStep, ProtocolVersion, Scenario, StepGroupMeta } from '../types';
 import { getPayload } from '../data/payloads';
+import { getPayloadTransStatus, getPayloadTransStatusReason } from './transStatus';
 
 export interface CorrelationEntry {
   key: string;
@@ -61,6 +62,130 @@ const CORRELATION_KEYS = [
   'errorComponent',
 ];
 
+const APP_DEVICE_CHANNEL = '01';
+const BROWSER_DEVICE_CHANNEL = '02';
+const LAB_SDK_TRANS_ID = 'sdk-tx-001';
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function applyChallengePreference(container: Record<string, unknown>, scenario: Scenario): void {
+  if (container.threeDSRequestorChallengeInd === undefined) return;
+  container.threeDSRequestorChallengeInd =
+    scenario.protocolVersion === '2.3.1' || scenario.protocolVersion === '2.4.0'
+      ? [scenario.challengePreference]
+      : scenario.challengePreference;
+}
+
+function applyChallengeMandated(container: Record<string, unknown>, scenario: Scenario): void {
+  if (container.acsChallengeMandated === undefined) return;
+  container.acsChallengeMandated =
+    scenario.transStatus === 'C'
+      ? scenario.challengeMandated
+      : 'N';
+}
+
+function stripBrowserFields(container: Record<string, unknown>): void {
+  [
+    'browserIP',
+    'browserAcceptHeader',
+    'browserLanguage',
+    'browserUserAgent',
+    'browserScreenWidth',
+    'browserScreenHeight',
+    'browserColorDepth',
+    'browserTZ',
+    'browserJavaEnabled',
+    'browserJavascriptEnabled',
+    'acceptLanguage',
+  ].forEach((key) => delete container[key]);
+}
+
+function applyAppAReqFields(container: Record<string, unknown>): void {
+  stripBrowserFields(container);
+  container.deviceChannel = APP_DEVICE_CHANNEL;
+  container.sdkAppID = '9d4b4b2b-6d73-4dc4-9f55-5f4cf4f10f10';
+  container.sdkEncData = 'eyJraWQiOiJsYWItc2RrLWVuYy0wMDEifQ.eyJkZXZpY2UiOiJzeW50aGV0aWMifQ.signature';
+  container.sdkEphemPubKey = {
+    kty: 'EC',
+    crv: 'P-256',
+    x: 'MKBCTNIcX4x5lJQ3K0e7gL7uQ8rS6h1XxJv3Q0vL0mM',
+    y: '4Etl6SRW2Yl9dA4T4zqM7l2fF0y0yX8l5Jf9h8nW2bI',
+  };
+  container.sdkMaxTimeout = '05';
+  container.sdkReferenceNumber = '3DS_LOA_SDK_PPFU_020100_00007';
+  container.sdkTransID = LAB_SDK_TRANS_ID;
+  if (container.sdkType !== undefined) container.sdkType = '01';
+  if (container.defaultSdkType !== undefined) {
+    container.defaultSdkType = {
+      sdkInterface: '01',
+      sdkUiType: ['01', '02', '03'],
+    };
+  }
+  if (container.splitSdkType !== undefined) container.splitSdkType = {};
+  if (container.sdkServerSignedContent !== undefined) {
+    container.sdkServerSignedContent = 'eyJhbGciOiJFUzI1NiIsImtpZCI6ImxhYi1zZGstc2lnbi0wMDEifQ.eyJzZGtUcmFuc0lE Ijoic2RrLXR4LTAwMSJ9.signature'.replace(' ', '');
+  }
+  if (container.appIp !== undefined) container.appIp = '198.51.100.42';
+}
+
+function applyDeviceChannelOverlay(
+  payload: Record<string, unknown>,
+  step: FlowStep,
+  scenario: Scenario,
+): void {
+  const isApp = scenario.deviceChannel === 'app';
+  const containers = [
+    payload,
+    asRecord(payload.body),
+    asRecord(payload.decodedData),
+  ].filter((value): value is Record<string, unknown> => Boolean(value));
+
+  containers.forEach((container) => {
+    if (container.deviceChannel !== undefined) {
+      container.deviceChannel = isApp ? APP_DEVICE_CHANNEL : BROWSER_DEVICE_CHANNEL;
+    }
+
+    applyChallengePreference(container, scenario);
+    applyChallengeMandated(container, scenario);
+
+    const messageType = typeof container.messageType === 'string'
+      ? container.messageType
+      : step.messageType;
+
+    if (isApp) {
+      if (messageType === 'AReq') applyAppAReqFields(container);
+
+      if (['ARes', 'CReq', 'CRes', 'RReq', 'RRes', 'Erro'].includes(messageType || '')) {
+        container.sdkTransID = LAB_SDK_TRANS_ID;
+      }
+
+      if ((messageType === 'ARes' || messageType === 'RReq') && asRecord(container.acsRenderingType)) {
+        (container.acsRenderingType as Record<string, unknown>).acsInterface = '01';
+      }
+
+      if (messageType === 'CReq' && container.threeDSRequestorAppURL !== undefined) {
+        container.threeDSRequestorAppURL = 'myapp://3ds/challenge';
+      }
+    } else {
+      if (['ARes', 'CReq', 'CRes', 'RReq', 'RRes', 'Erro'].includes(messageType || '') && container.sdkTransID !== undefined) {
+        container.sdkTransID = '';
+      }
+
+      if ((messageType === 'ARes' || messageType === 'RReq') && asRecord(container.acsRenderingType)) {
+        (container.acsRenderingType as Record<string, unknown>).acsInterface = '02';
+      }
+
+      if (messageType === 'CReq' && container.threeDSRequestorAppURL !== undefined) {
+        container.threeDSRequestorAppURL = '';
+      }
+    }
+  });
+}
+
 /**
  * Resolve a FlowStep's payload to a JSON object for a given scenario.
  *
@@ -93,12 +218,23 @@ export function getDynamicPayload(step: FlowStep, scenario: Scenario): Record<st
 
   if (!payload) return null;
 
-  if (payload.transStatus !== undefined) payload.transStatus = scenario.transStatus;
+  applyDeviceChannelOverlay(payload, step, scenario);
+
+  const payloadTransStatus = getPayloadTransStatus(step, scenario);
+
+  if (payload.transStatus !== undefined) payload.transStatus = payloadTransStatus;
+  if (payload.transStatusReason !== undefined) {
+    payload.transStatusReason = getPayloadTransStatusReason(step, scenario, payloadTransStatus);
+  }
 
   const body = payload.body;
   if (body && typeof body === 'object' && !Array.isArray(body)) {
     if ((body as Record<string, unknown>).transStatus !== undefined) {
-      (body as Record<string, unknown>).transStatus = scenario.transStatus;
+      (body as Record<string, unknown>).transStatus = payloadTransStatus;
+    }
+    if ((body as Record<string, unknown>).transStatusReason !== undefined) {
+      (body as Record<string, unknown>).transStatusReason =
+        getPayloadTransStatusReason(step, scenario, payloadTransStatus);
     }
   }
 
@@ -114,17 +250,13 @@ export function getDynamicPayload(step: FlowStep, scenario: Scenario): Record<st
     (body as Record<string, unknown>).threeDSCompInd = threeDSCompInd;
   }
 
-  const challengeResult =
-    scenario.challengeOutcome === 'success'
-      ? 'Y'
-      : scenario.challengeOutcome === 'decoupled'
-        ? 'D'
-        : 'N';
-
-  if (step.id === 'step_17' && payload.transStatus !== undefined) payload.transStatus = challengeResult;
-
   if ((step.id === 'step_18' || step.id === 'step_19') && payload.resultsStatus !== undefined) {
-    payload.resultsStatus = scenario.challengeOutcome === 'decoupled' ? '04' : '01';
+    payload.resultsStatus =
+      scenario.challengeOutcome === 'optout'
+        ? '02'
+        : scenario.challengeOutcome === 'decoupled'
+          ? '04'
+          : '01';
   }
 
   return payload;
@@ -193,7 +325,7 @@ export function getScenarioBranchMeta(scenario: Scenario): ScenarioBranchMeta {
     return {
       branchId: 'optout',
       label: 'Requestor Opt-out',
-      summary: 'Browser challenge is skipped locally and the results loop closes with resultsStatus 02.',
+      summary: 'The requested challenge is skipped locally and the results loop closes with resultsStatus 02.',
       lane: 'challenge',
       branchKind: 'alternative',
     };
@@ -214,7 +346,7 @@ export function getScenarioBranchMeta(scenario: Scenario): ScenarioBranchMeta {
       return {
         branchId: 'frictionless_y',
         label: 'Frictionless Authentication',
-        summary: 'The issuer authenticates without challenge and the merchant continues with an authenticated result.',
+        summary: 'The issuer authenticates without challenge, so the flow closes on ARes with no CReq/CRes or RReq/RRes results loop.',
         lane: 'frictionless',
         branchKind: 'happy',
       };
@@ -232,14 +364,14 @@ export function getScenarioBranchMeta(scenario: Scenario): ScenarioBranchMeta {
         label: 'Challenge Branch',
         summary:
           scenario.challengeOutcome === 'success'
-            ? 'The browser challenge completes successfully and the results loop closes with authenticated state.'
+            ? 'The challenge completes successfully and the results loop closes with an authenticated state.'
             : scenario.challengeOutcome === 'decoupled'
-              ? 'The browser challenge pivots into an asynchronous issuer-controlled decoupled path.'
+              ? 'The challenge pivots into an asynchronous issuer-controlled decoupled path.'
               : scenario.challengeOutcome === 'invalid_cres'
-                ? 'The challenge returns a browser completion artifact that the requestor must reject.'
+                ? 'The challenge returns a completion artifact that the requestor must reject.'
                 : scenario.challengeOutcome === 'error'
-                  ? 'The browser challenge ends in an explicit error notification path.'
-                  : 'The browser challenge becomes the decisive branch for the transaction outcome.',
+                  ? 'The challenge ends in an explicit error notification path.'
+                  : 'The challenge becomes the decisive branch for the transaction outcome.',
         lane: 'challenge',
         branchKind: scenario.challengeOutcome === 'decoupled' ? 'async' : 'alternative',
       };
@@ -247,7 +379,7 @@ export function getScenarioBranchMeta(scenario: Scenario): ScenarioBranchMeta {
       return {
         branchId: 'decoupled_d',
         label: 'Decoupled Authentication',
-        summary: 'The issuer moves authentication out of the browser and the requestor waits for the authoritative RReq.',
+        summary: 'The issuer moves authentication out of the immediate requestor session and waits for the authoritative RReq.',
         lane: 'decoupled',
         branchKind: 'async',
       };
@@ -362,6 +494,7 @@ export function validateScenario(value: unknown): string[] {
   const errors: string[] = [];
   const required: Array<{ key: keyof Scenario; type: 'string'; values?: readonly string[] }> = [
     { key: 'protocolVersion', type: 'string', values: PROTOCOL_VERSIONS as readonly string[] },
+    { key: 'deviceChannel', type: 'string', values: ['browser', 'app'] },
     { key: 'methodPath', type: 'string', values: ['reused', 'executed', 'unavailable', 'timeout'] },
     { key: 'dsRouting', type: 'string', values: ['normal', 'failure'] },
     { key: 'transStatus', type: 'string', values: ['Y', 'A', 'N', 'U', 'R', 'C', 'D', 'I', 'S'] },

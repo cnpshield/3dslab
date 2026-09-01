@@ -12,6 +12,7 @@
 import type { Scenario } from '../../../types';
 import type { PayloadBuilder } from '../types';
 import { AReq_v210_FIXTURE_IDS } from '../areq/v210';
+import { getAResTransStatusReason } from '../../../utils/transStatus';
 
 const { SERVER_TRANS_ID, DS_TRANS_ID, ACS_TRANS_ID } = AReq_v210_FIXTURE_IDS;
 
@@ -36,7 +37,7 @@ export const buildARes_v210: PayloadBuilder = (scenario: Scenario) => {
     acsReferenceNumber: 'ACS-REF-34',
     dsTransID: DS_TRANS_ID,
     transStatus,
-    transStatusReason: isY ? '' : scenario.transStatus === 'N' ? '01' : '',
+    transStatusReason: getAResTransStatusReason(transStatus),
     acsChallengeMandated: isC ? 'N' : 'N',
     // v2.1.0: cardholderInfo is a string.
     cardholderInfo: isC ? 'Please complete the authentication challenge from your issuer.' : '',

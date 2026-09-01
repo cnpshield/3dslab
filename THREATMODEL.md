@@ -1,8 +1,8 @@
 # Threat Model — EMV 3-D Secure Protocol Lab
 
 > **Scope.** This document describes the threats the lab is designed to
-> surface and the threats the lab itself introduces. It is a research
-> artifact for an academic submission; it is not a production threat
+> surface and the threats the lab itself introduces. It is a reference
+> tool for protocol analysis; it is not a production threat
 > model for a payment system. A clear scope statement is the first
 > step towards a credible threat model.
 
@@ -94,7 +94,7 @@ opt-out branch and the DetailsPanel annotates each step with the
 `resultsStatus` and `challengeCancelationIndicator` values that
 encode the opt-out semantics.
 
-### 3.4 Decoupled authentication as a timing oracle
+### 3.4 Decoupled authentication as a timing side-channel
 
 **Threat.** When the ACS returns `transStatus = D`, the 3DS Server
 must poll (or wait for a callback) for the RReq. The timing of the
@@ -126,7 +126,7 @@ qualifies as a fingerprint candidate (see
 
 ## 4. Threats the lab introduces
 
-The lab is a research artifact. We are explicit about its own
+The lab is a reference tool. We are explicit about its own
 attack surface.
 
 ### 4.1 Synthetic payload leakage
@@ -140,7 +140,7 @@ values are recognisable: correlation IDs are
 
 **Mitigation.** Every rendered payload is marked with a visible
 "Synthetic payload" watermark in the inspector, and the README plus
-`LICENSES/EMVCo-notice.md` state the research-only status. Copying a
+`LICENSES/EMVCo-notice.md` state the reference-only status. Copying a
 payload is an explicit user action via the inspector toolbar; nothing
 is exported automatically. A future hardening pass will add a
 checksum banner at the top of every inspector view.
@@ -162,7 +162,7 @@ JSON snapshot files. No `localStorage` writes are performed.
 **Risk.** v2.1.0 / v2.2.0 data is sourced from the
 `3DSv2-api-documentation` re-typeset (3dsecure.io), which is itself
 a paraphrase of the EMVCo Core Spec. Treating a paraphrase as
-authoritative is a known risk for security research.
+authoritative is a known risk for protocol analysis.
 
 **Mitigation.** The `LICENSES/EMVCo-notice.md` file documents the
 chain of custody. The field-provenance registry tags every
@@ -186,9 +186,9 @@ extending the lab should add their own threat-model entries.
   participants. A compromised ACS or DS is out of scope; that
   threat is documented in the EMVCo threat catalogue, not here.
 
-## 6. Reporting a vulnerability in the lab
+## 6. Reporting a lab issue
 
 If you find a security issue in the lab itself (not the protocol),
-please follow the CVD timeline in `SECURITY.md`. We commit to a
-90-day disclosure window from the date of the report, with a
-14-day pre-disclosure patch review.
+please follow the reporting process in `SECURITY.md`. We aim for a
+90-day coordination window from the date of the report, with a
+14-day pre-release patch review.

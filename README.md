@@ -2,7 +2,7 @@
 
 # EMV 3-D Secure Protocol Lab
 
-**A vendor-neutral, browser-based research lab for visualising, comparing,
+**A vendor-neutral, browser-based reference lab for visualising, comparing,
 and debugging EMV 3-D Secure (3DS) protocol flows across every published
 spec version.**
 
@@ -30,8 +30,8 @@ spec version.**
 > EMV® 3-D Secure (3DS) protocol — the SCA layer that sits behind Visa Secure,
 > Mastercard Identity Check, Amex SafeKey 2.0, J/Secure, and UnionPay 3DS.
 > It is *not* a production 3DS Server, ACS, or SDK. It is a visual,
-> interactive, side-by-side protocol debugger built so that researchers,
-> payment engineers, students, and bug-bounty hunters can finally
+> interactive, side-by-side protocol debugger built so that security researchers,
+> payment engineers, and students can finally
 > *see* what is happening between the merchant, the 3DS Server, the
 > Directory Server, and the ACS — including the modern extensions that
 > most 3DS diagrams skip: SPC, WebAuthn / FIDO2, and Decoupled
@@ -48,13 +48,13 @@ spec version.**
 - [Features](#features)
 - [Specification coverage](#specification-coverage)
 - [Quickstart](#quickstart)
-- [Using the lab for research](#using-the-lab-for-research)
+- [Using the lab for analysis](#using-the-lab-for-analysis)
 - [Architecture](#architecture)
 - [Roadmap](#roadmap)
 - [Threat model](#threat-model)
 - [Related work](#related-work)
 - [Contributing](#contributing)
-- [Security disclosure](#security-disclosure)
+- [Reporting issues](#reporting-issues)
 - [Citing this work](#citing-this-work)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
@@ -70,12 +70,12 @@ implementation with no normative context. Neither is enough if you are:
 
 - **A payment engineer** debugging a 3DS Server integration at 02:00,
   trying to understand *why* your AReq is being rejected.
-- **A security researcher** running coordinated vulnerability disclosure
-  against a DS, ACS, or 3DS SDK implementation.
+- **A security researcher** reviewing protocol behavior, trust boundaries,
+  and implementation choices across the EMV 3DS flow.
 - **A graduate student or instructor** trying to teach 3DS without
   handing out a 300-page PDF and hoping for the best.
-- **A bug-bounty hunter** trying to spot SDK-collector data leaks
-  before they ship to production.
+- **A reviewer or instructor** trying to explain how issuer decisions,
+  challenge paths, and message fields actually fit together.
 
 This lab is a working answer to all four. The spec is the source of
 truth — every node, edge, and message in the visualiser cites the
@@ -108,10 +108,10 @@ The design constraints are non-negotiable:
 4. Click any **message** to inspect its JWS/JWE payload with the
    correct EMVCo section annotation, every required and conditional
    field highlighted, and base64url / MAC errors spotlighted in place.
-5. Toggle the **Security Lens** to overlay the OWASP / CVD-relevant
-   risks for that message (replay, downgrade, signature mismatch, etc.).
+5. Toggle the **Security Lens** to overlay trust-boundary notes,
+   implementation checks, and protocol-integrity considerations for that message.
 6. **Export** the current scenario as a JSON snapshot for regression
-   tests, write-ups, or to attach to a vulnerability report.
+   tests, internal reviews, or technical write-ups.
 
 > **Try this first:** Scenario → *Challenge (browser)* → step through
 > until the CReq → **CRes** pair, then toggle the **Security Lens**.
@@ -141,8 +141,8 @@ five canonical messages are:
 |---|---|---|
 | **PReq / PRes** | 3DS Server ↔ DS | Out-of-band card-range + protocol-version lookup (cache warm-up) |
 | **AReq / ARes** | 3DS Server ↔ DS ↔ ACS | Authentication request: the ACS decides frictionless vs challenge |
-| **CReq / CRes** | 3DS SDK ↔ ACS | Challenge interaction (the actual OTP / biometric / WebAuthn prompt) |
-| **RReq / RRes** | 3DS Server ↔ DS ↔ ACS | Final results: did the issuer authenticate? |
+| **CReq / CRes** | Browser: 3DS Server / Browser ↔ ACS; App: 3DS SDK ↔ ACS | Challenge interaction and browser/app challenge completion |
+| **RReq / RRes** | ACS → DS → 3DS Server, then 3DS Server → DS → ACS | Authoritative final result (`RReq`) and acknowledgement (`RRes`) |
 
 EMVCo owns the spec; the current production version is **2.3.1** and
 **2.4.0** is in draft (comment period ending July 2026). See
@@ -160,7 +160,7 @@ for the authoritative documents.
 | A sandbox for understanding SPA / UCAF, SPC, WebAuthn, Decoupled Auth | A production payment gateway |
 | A regression test surface (JSON snapshots are importable) | A PCI-DSS scope-reduction tool |
 | A teaching aid with traceable spec citations | A compliance attestation |
-| A CVD workflow aid (with `SECURITY.md` and a 90-day disclosure policy) | A responsible-disclosure platform in itself |
+| A protocol-analysis workflow aid with a reporting policy for lab issues | A hosted disclosure platform |
 
 ---
 
@@ -241,10 +241,10 @@ for the authoritative documents.
 Message-level coverage:
 
 - [x] **PReq / PRes** — card-range + protocol-version synchronisation
-- [x] **AReq / ARes** — including all `messageCategory` variants
-      (`01`–`04`: PA, NPA, 3RI, MNP)
-- [x] **CReq / CRes** — browser and SDK challenge paths
-- [x] **RReq / RRes** — final results, including decoupled polling
+- [x] **AReq / ARes** — including both defined `messageCategory` values
+      (`01` = PA, `02` = NPA). 3RI is modelled via `deviceChannel` / `threeRIInd`, not a separate `messageCategory`.
+- [x] **CReq / CRes** — browser challenge flow in the interactive canvas; browser and app/SDK message shapes in the payload registry
+- [x] **RReq / RRes** — final results, including decoupled polling, with `RReq` as the result carrier and `RRes` as the acknowledgement
 - [x] **threeDSMethodData** — hidden browser-collector flow
 - [x] **ER (Error) messages** — protocol-level error codes per role
 - [x] **SPC** — Secure Payment Confirmation
@@ -263,7 +263,7 @@ account to create**.
 
 ### Option A — Use the hosted lab
 
-> **Recommended for most researchers.**
+> **Recommended for most users.**
 > [emv-3ds-lab.github.io](https://emv-3ds-lab.github.io)
 
 It is served from this repository's `main` branch via GitHub Pages and
@@ -287,7 +287,7 @@ pnpm build
 pnpm preview         # → http://localhost:4173
 ```
 
-### Option C — Pin to a specific commit (for reproducible research)
+### Option C — Pin to a specific commit (for reproducible analysis)
 
 ```bash
 git clone https://github.com/emv-3ds-lab/emv-3ds-lab.github.io.git emv-3ds-protocol-lab
@@ -303,16 +303,16 @@ the lab to render identically a year from now.
 
 ---
 
-## Using the lab for research
+## Using the lab for analysis
 
 Concrete patterns the lab is designed to support:
 
 - **Reconstructing a 3DS capture.** Load a captured JWS payload from
-  your local investigation into the relevant scenario, step through it,
-  and export the annotated JSON for your write-up.
-- **CVD write-ups.** Use the Security Lens as a checklist while you
-  draft. Each overlay references the spec section that the behaviour
-  violates.
+  your local analysis into the relevant scenario, step through it,
+  and export the annotated JSON for your notes or report.
+- **Security review.** Use the Security Lens as a structured checklist
+  while you inspect a branch. Each overlay points back to the protocol
+  phase, message shape, and trust assumption in play.
 - **Teaching.** Run the lab live, scrub through a Challenge flow, and
   pause on the ARes to ask the room "what does the issuer know at this
   point?". The details panel surfaces exactly that.
@@ -350,7 +350,7 @@ emv-3ds-protocol-lab/
 │   └── roadmap.md                 # Near- and mid-term plans
 ├── .github/                       # Issue + PR templates
 ├── CITATION.cff                   # Academic citation metadata
-├── SECURITY.md                    # CVD policy (90-day default)
+├── SECURITY.md                    # Reporting policy for issues in the lab itself
 └── CONTRIBUTING.md                # Contribution workflow
 ```
 
@@ -378,7 +378,7 @@ coordinate.
    shapes into the visualiser.
 2. **WebAuthn / FIDO2 deeper inspection** — show the assertion object
    alongside the CRes wrapper.
-3. **Failure-injection DSL** — let researchers script custom
+3. **Failure-injection DSL** — let users script custom
    DS / ACS / network failure sequences for regression fixtures.
 4. **EUDI Wallet binding** for 3DS, once the EMVCo guidance is final.
 5. **Internationalisation** — pull message labels and tooltip copy
@@ -393,8 +393,8 @@ explicit non-goals.
 
 ## Threat model
 
-This section is for researchers and security reviewers evaluating
-whether the lab itself introduces any risk to a research workflow.
+This section is for analysts and security reviewers evaluating
+whether the lab itself introduces any risk to a protocol-analysis workflow.
 
 **In scope of the lab's threat model**
 
@@ -421,8 +421,8 @@ whether the lab itself introduces any risk to a research workflow.
   synthetic and clearly labelled as such in the UI.
 
 If you find a real issue in the lab itself, please follow
-[SECURITY.md](./SECURITY.md). The default disclosure window is **90
-days** in line with [CVD norms](https://en.wikipedia.org/wiki/Coordinated_vulnerability_disclosure).
+[SECURITY.md](./SECURITY.md). The default reporting window is **90
+days** in line with common coordinated-reporting norms.
 
 ---
 
@@ -458,8 +458,8 @@ request. The short version:
   can agree on the spec section it cites, the data model, and the
   visual treatment.
 - **Security-relevant changes** (anything touching the JWS parser,
-  the snapshot import path, or the URL hydration) → follow the CVD
-  process in [SECURITY.md](./SECURITY.md), not the normal PR process.
+  the snapshot import path, or the URL hydration) → follow the
+  reporting process in [SECURITY.md](./SECURITY.md), not the normal PR process.
 - All commits are accepted under the Apache 2.0 license that ships
   with the project. By contributing, you affirm the standard
   Developer Certificate of Origin (DCO) and agree your contribution
@@ -472,22 +472,22 @@ either pick it up or hand it off.
 
 ---
 
-## Security disclosure
+## Reporting issues
 
-This is a research tool that other researchers will use to *reason
-about* security-critical protocols. We treat the lab's own security
-with the same seriousness as if it were production.
+This is a protocol reference tool that people may rely on for
+security analysis and implementation review. We treat the lab's own
+security and correctness with the same seriousness as if it were production.
 
 **Please report issues privately first.** See
 [SECURITY.md](./SECURITY.md) for the full policy, including the
-90-day disclosure window, the private reporting channels, and the
+90-day coordination window, the private reporting channels, and the
 scope of what counts as a reportable issue.
 
 ---
 
 ## Citing this work
 
-If the lab contributed to a paper, post, vulnerability report, or
+If the lab contributed to a paper, post, technical report, or
 teaching material, please cite it. A [CITATION.cff](./CITATION.cff)
 file is shipped in the repository root, so most citation managers
 (GitHub's "Cite this repository" button, Zotero, etc.) will pick up
@@ -577,7 +577,7 @@ being here.
 
 **EMV 3-D Secure Protocol Lab** · [Lab](https://emv-3ds-lab.github.io) ·
 [Issues](https://github.com/emv-3ds-lab/emv-3ds-lab.github.io/issues) ·
-[CVD](./SECURITY.md) ·
+[Security](./SECURITY.md) ·
 [Cite](./CITATION.cff)
 
 </div>
