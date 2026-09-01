@@ -23,20 +23,20 @@ keywords:
   - branch-view
   - security-research
 authors:
-  - family-names: Wasif
-    given-names: Faisal
+  - family-names: Faisal
+    given-names: Wasif
     email: md.wasif.faisal@g.bracu.ac.bd
     affiliation: BRAC University
 preferred-citation:
-  type: misc
-  title: EMV 3-D Secure Protocol Lab — reference tool
+  type: software
+  title: EMV 3-D Secure Protocol Lab
   authors:
-    - family-names: Wasif
-      given-names: Faisal
+    - family-names: Faisal
+      given-names: Wasif
       email: md.wasif.faisal@g.bracu.ac.bd
       affiliation: BRAC University
   year: 2026
-  url: https://github.com/emv-3ds-lab/emv-3ds-lab.github.io
+  url: https://github.com/cnpshield/3dslab
 references:
   - type: standard
     title: EMV 3-D Secure Protocol and Core Functions Specification
