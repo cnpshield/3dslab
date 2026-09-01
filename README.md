@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./public/brandmark.svg" alt="EMV 3DS Protocol Lab logo" width="96" height="96" />
+
 # EMV 3-D Secure Protocol Lab
 
 **A vendor-neutral, browser-based reference lab for visualising, comparing,
