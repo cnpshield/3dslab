@@ -59,6 +59,20 @@ main.tex
 *.toc
 *.synctex.gz
 
-# verbatim EMVCo spec text — copyright, never commit
+# package manager lockfile (pnpm is the sole source of truth)
+package-lock.json
+yarn.lock
+
+# verbatim EMVCo spec text / scratch extraction — copyright, never commit
 EMV-3-D-Secure-*.md
-core-spec-extracted.txt
+core-spec-extracted.*
+*-extracted.*
+sdk-deviceinfo-extracted.*
+emvco-3ds-faq-*.md
+
+# scratch notes / drafts
+linkedin-*.md
+video-*.md
+browser-frictionless-*.md
+open-source-rust-*.md
+part-*.md
