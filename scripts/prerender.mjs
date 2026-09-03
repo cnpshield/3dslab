@@ -36,7 +36,7 @@ const PAYLOADS_DIR = join(ROOT, 'src', 'data', 'payloads');
 
 const CANONICAL_ORIGIN = 'https://cnpshield.github.io/3dslab';
 const SITE_NAME = 'EMV 3DS Protocol Lab';
-const OG_IMAGE = `${CANONICAL_ORIGIN}/og-image.png`;
+const OG_IMAGE = `${CANONICAL_ORIGIN}/og-image.png?v=2`;
 
 /** Minimal HTML escape for text content. */
 function esc(s) {
