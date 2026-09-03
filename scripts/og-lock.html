@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      width: 1200px;
+      height: 630px;
+      overflow: hidden;
+      background: #0b1020;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .glow {
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(37, 99, 235, 0.35) 0%, rgba(30, 58, 138, 0.12) 50%, transparent 70%);
+      pointer-events: none;
+    }
+    .icon-wrapper {
+      position: relative;
+      z-index: 2;
+      filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 30px rgba(59, 130, 246, 0.4));
+    }
+    svg {
+      width: 340px;
+      height: 340px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="icon-wrapper">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 32 32"
+      fill="none"
+    >
+      <defs>
+        <linearGradient id="emvShieldGrad" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#3b82f6" />
+          <stop offset="100%" stop-color="#1d4ed8" />
+        </linearGradient>
+        <linearGradient id="emvCoreGrad" x1="10" y1="8" x2="22" y2="24" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#ffffff" />
+          <stop offset="100%" stop-color="#dbeafe" />
+        </linearGradient>
+      </defs>
+
+      <!-- Outer Shield -->
+      <path
+        d="M16 2.5L5 6.8v8.2c0 6.6 4.7 12.8 11 14.5 6.3-1.7 11-7.9 11-14.5V6.8L16 2.5z"
+        fill="url(#emvShieldGrad)"
+        stroke="#60a5fa"
+        stroke-width="1.2"
+        stroke-linejoin="round"
+      />
+
+      <!-- Inset Accent Ring -->
+      <path
+        d="M16 4.6L7 8.1v6.9c0 5.4 3.8 10.5 9 12 5.2-1.5 9-6.6 9-12V8.1L16 4.6z"
+        fill="none"
+        stroke="rgba(255, 255, 255, 0.3)"
+        stroke-width="0.8"
+      />
+
+      <!-- Shackle -->
+      <path
+        d="M12.5 13.5V11a3.5 3.5 0 1 1 7 0v2.5"
+        stroke="url(#emvCoreGrad)"
+        stroke-width="1.8"
+        stroke-linecap="round"
+      />
+
+      <!-- Lock Body -->
+      <rect x="10.5" y="13.5" width="11" height="8.5" rx="2" fill="url(#emvCoreGrad)" />
+
+      <!-- Keyhole -->
+      <circle cx="16" cy="17" r="1.2" fill="#1e3a8a" />
+      <path d="M15.5 17.8h1l.3 2.2h-1.6l.3-2.2z" fill="#1e3a8a" />
+    </svg>
+  </div>
+</body>
+</html>
