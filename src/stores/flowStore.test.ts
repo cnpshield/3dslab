@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeSequenceDigest, _deriveActiveStepsForTest } from './flowStore';
+import { computeSequenceDigest, _deriveActiveStepsForTest, flowStore, flowActions } from './flowStore';
 import type { FlowStep, Scenario, StepGroupId } from '../types';
 
 const SAMPLE_SCENARIO: Scenario = {
@@ -100,5 +100,42 @@ describe('computeSequenceDigest', () => {
     expect(digest).toContain('m=executed');
     expect(digest).toContain('r=normal');
     expect(digest).toContain('v=2.3.1');
+  });
+});
+
+describe('flowActions simulation and playback controls', () => {
+  it('toggles isPlaying correctly', () => {
+    flowActions.reset();
+    expect(flowStore.getState().isPlaying).toBe(false);
+    flowActions.togglePlay();
+    expect(flowStore.getState().isPlaying).toBe(true);
+    flowActions.togglePlay();
+    expect(flowStore.getState().isPlaying).toBe(false);
+  });
+
+  it('pauses and plays cleanly', () => {
+    flowActions.play();
+    expect(flowStore.getState().isPlaying).toBe(true);
+    flowActions.pause();
+    expect(flowStore.getState().isPlaying).toBe(false);
+  });
+
+  it('restarts from step 0 when toggling play at the final step', () => {
+    const steps = flowStore.getState().activeSteps;
+    const lastIndex = steps.length - 1;
+    flowActions.setCurrentStepIndex(lastIndex);
+    flowActions.pause();
+
+    expect(flowStore.getState().currentStepIndex).toBe(lastIndex);
+    expect(flowStore.getState().isPlaying).toBe(false);
+
+    // When a researcher presses Space at the end, it should restart from step 0 and play!
+    flowActions.togglePlay();
+
+    expect(flowStore.getState().isPlaying).toBe(true);
+    expect(flowStore.getState().currentStepIndex).toBe(0);
+
+    // Clean up
+    flowActions.reset();
   });
 });

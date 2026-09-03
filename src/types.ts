@@ -3,6 +3,7 @@ export type DSRouting = 'normal' | 'failure';
 export type TransStatus = 'Y' | 'A' | 'N' | 'U' | 'R' | 'C' | 'D' | 'I' | 'S';
 export type ProtocolVersion = '2.1.0' | '2.2.0' | '2.3.1' | '2.4.0';
 export type VisualizationMode = 'sequence' | 'branch';
+export type CanvasOrientation = 'vertical' | 'horizontal';
 export type ChallengeOutcome = 'success' | 'failure' | 'cancelled' | 'decoupled' | 'optout' | 'error' | 'invalid_cres';
 export type ErrorPath = 'none' | 'cres_invalid' | 'acs_error' | 'browser_timeout';
 export type ChallengePreference = '01' | '02' | '03' | '04';

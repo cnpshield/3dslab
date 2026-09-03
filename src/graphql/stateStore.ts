@@ -5,7 +5,7 @@
  * with clean, human-readable IDs like `?s=s_9fb2c1`.
  */
 
-import type { Scenario } from '../types';
+import type { Scenario, StepGroupId } from '../types';
 
 export interface PersistedLabState {
   token: string;
@@ -14,6 +14,10 @@ export interface PersistedLabState {
   currentStepIndex?: number;
   theme?: 'light' | 'dark';
   securityLensEnabled?: boolean;
+  hiddenGroups?: StepGroupId[];
+  canvasOrientation?: 'vertical' | 'horizontal';
+  readingMode?: boolean;
+  focusPhase?: boolean;
 }
 
 const STORAGE_KEY = 'emv_3ds_graphql_states';
@@ -30,7 +34,14 @@ function generateShortHash(input: string): string {
 }
 
 export function saveStateToStore(state: Omit<PersistedLabState, 'token' | 'createdAt'>): PersistedLabState {
-  const token = generateShortHash(JSON.stringify(state.scenario) + (state.currentStepIndex ?? 0));
+  const token = generateShortHash(
+    JSON.stringify(state.scenario) +
+    (state.currentStepIndex ?? 0) +
+    JSON.stringify(state.hiddenGroups ?? []) +
+    (state.canvasOrientation ?? 'vertical') +
+    (state.readingMode ? 'r' : '') +
+    (state.focusPhase ? 'f' : '')
+  );
   const record: PersistedLabState = {
     token,
     createdAt: new Date().toISOString(),

@@ -11,11 +11,12 @@ import {
 } from '@xyflow/react';
 import type { Edge, Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Sun, Moon, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, BookOpen, Eye, EyeOff, Crosshair, Link2, ShieldCheck, List, Download, Upload, Info, FileWarning, Layers, Compass } from 'lucide-react';
+import { Sun, Moon, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, BookOpen, Eye, EyeOff, Crosshair, Link2, ShieldCheck, List, Download, Upload, Info, FileWarning, Layers, Compass, Focus, ArrowLeftRight, X, Keyboard } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 import { useHashRoute, navigateToRoute, type RouteId } from './routes';
 import { Seo } from './components/Seo';
 import { TourGuide } from './components/TourGuide';
+import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { BrandMark } from './components/BrandMark';
 import './App.css';
 import './landing-pages.css';
@@ -28,7 +29,7 @@ import { BranchMap } from './components/BranchMap';
 import { Controls } from './components/Controls';
 import { DetailsPanel } from './components/DetailsPanel';
 import type { DetailsContext } from './components/DetailsPanel';
-import { flowStore, flowActions } from './stores/flowStore';
+import { flowStore, flowActions, type PlaySpeed } from './stores/flowStore';
 import { uiStore, uiActions } from './stores/uiStore';
 import { EMVCO_DEVICE_FIELDS } from './data/emvcoFingerprint';
 import { serializeSnapshot, parseSnapshot, downloadSnapshot } from './utils/snapshot';
@@ -74,6 +75,19 @@ const X_COORDS = {
 // X coordinate for the step-number rail (left margin of the diagram).
 const STEP_RAIL_X = -50;
 
+// Coordinates for Horizontal sequence layout (participants stacked as rows along Y)
+const Y_COORDS_HORIZONTAL: Record<string, number> = {
+  CH: 110,
+  BR: 240,
+  RE: 370,
+  S: 500,
+  DS: 630,
+  ACS: 760,
+};
+const STEP_RAIL_Y_HORIZONTAL = 26;
+const STEP_X_BASE_HORIZONTAL = 240;
+const STEP_X_GAP_HORIZONTAL = 140;
+
 const PROJECT_AUTHOR_NAME = 'Wasif Faisal';
 const PROJECT_AUTHOR_AFFILIATION = 'BRAC University';
 const PROJECT_AUTHOR_ROLE = 'Lead Researcher & Protocol Architect';
@@ -88,6 +102,9 @@ type SharedAppState = {
   hiddenGroups?: StepGroupId[];
   theme?: 'dark' | 'light' | 'security';
   visualizationMode?: 'sequence' | 'branch';
+  canvasOrientation?: 'vertical' | 'horizontal';
+  readingMode?: boolean;
+  focusPhase?: boolean;
   compareVersion?: ProtocolVersion | null;
   securityLensEnabled?: boolean;
   scenarioToolbarCollapsed?: boolean;
@@ -134,7 +151,11 @@ function AppContent() {
   const detailsContext = uiStore.useStore((s) => s.detailsContext);
   const showListView = uiStore.useStore((s) => s.showListView);
   const visualizationMode = uiStore.useStore((s) => s.visualizationMode);
+  const canvasOrientation = uiStore.useStore((s) => s.canvasOrientation);
+  const readingMode = uiStore.useStore((s) => s.readingMode);
+  const focusPhase = uiStore.useStore((s) => s.focusPhase);
   const compareVersion = uiStore.useStore((s) => s.compareVersion);
+  const isShortcutsOpen = uiStore.useStore((s) => s.isShortcutsOpen);
 
   // === Memoized participant lookup. The render path queries the
   // === participant table inside the active-steps loop (3 sites: rail
@@ -159,6 +180,7 @@ function AppContent() {
   const [snapshotImportStatus, setSnapshotImportStatus] = useState<{ kind: 'ok' | 'err'; message: string } | null>(null);
   const snapshotFileInputRef = useRef<HTMLInputElement>(null);
   const snapshotImportTimerRef = useRef<number | null>(null);
+  const sequenceShellRef = useRef<HTMLDivElement>(null);
 
   // Tour is user-initiated via the Tour button in the header for a clean, minimal initial load
 
@@ -200,7 +222,18 @@ function AppContent() {
         const rawState = params.get('state');
 
         if (shortToken) {
-          const res = await executeGraphQL<{ savedState: { scenario: Scenario; currentStepIndex?: number } }>(`
+          const res = await executeGraphQL<{
+            savedState: {
+              scenario: Scenario;
+              currentStepIndex?: number;
+              theme?: 'light' | 'dark' | 'security';
+              securityLensEnabled?: boolean;
+              hiddenGroups?: StepGroupId[];
+              canvasOrientation?: 'vertical' | 'horizontal';
+              readingMode?: boolean;
+              focusPhase?: boolean;
+            };
+          }>(`
             query GetSavedState($token: ID!) {
               savedState(token: $token) {
                 scenario {
@@ -211,12 +244,30 @@ function AppContent() {
                   challengeOutcome
                   challengePresentation
                 }
+                currentStepIndex
+                theme
+                securityLensEnabled
+                hiddenGroups
+                canvasOrientation
+                readingMode
+                focusPhase
               }
             }
           `, { token: shortToken });
 
           if (res.data?.savedState?.scenario) {
-            flowActions.setScenario(res.data.savedState.scenario);
+            flowActions.hydrate({
+              scenario: res.data.savedState.scenario,
+              currentStepIndex: res.data.savedState.currentStepIndex,
+              hiddenGroups: res.data.savedState.hiddenGroups,
+            });
+            uiActions.hydrate({
+              theme: res.data.savedState.theme,
+              securityLensEnabled: res.data.savedState.securityLensEnabled,
+              canvasOrientation: res.data.savedState.canvasOrientation ?? 'vertical',
+              readingMode: res.data.savedState.readingMode ?? false,
+              focusPhase: res.data.savedState.focusPhase ?? false,
+            });
           }
         } else if (rawState) {
           const parsed = JSON.parse(rawState) as SharedAppState;
@@ -232,6 +283,9 @@ function AppContent() {
             theme: (parsed.theme === 'security' || !parsed.theme) ? 'light' : parsed.theme,
             securityLensEnabled: parsed.securityLensEnabled,
             isScenarioToolbarCollapsed: parsed.scenarioToolbarCollapsed ?? true,
+            canvasOrientation: parsed.canvasOrientation ?? 'vertical',
+            readingMode: parsed.readingMode ?? false,
+            focusPhase: parsed.focusPhase ?? false,
           });
 
           // Clean up address bar: remove the giant ugly ?state={...} string
@@ -357,10 +411,41 @@ function AppContent() {
     return () => clearInterval(interval);
   }, [isPlaying, playSpeed]);
 
-  // === Stable dispatcher for the 1–8 digit keyboard shortcuts. We use
-  // === a `useCallback` that takes an index so the closure is stable
-  // === and can be safely referenced from the keydown handler without
-  // === a forward-ref hack.
+  // === Focus phase helpers: highlight/spotlight the active phase ===
+  const currentPhaseId = currentStep?.groupId;
+  const currentPhase = STEP_GROUPS.find((g) => g.id === currentPhaseId);
+  const currentPhaseSteps = useMemo(
+    () => (currentPhaseId ? activeSteps.filter((s) => s.groupId === currentPhaseId) : []),
+    [activeSteps, currentPhaseId]
+  );
+
+  const handlePrevPhase = useCallback(() => {
+    if (!currentPhaseId) return;
+    const currentIdx = STEP_GROUPS.findIndex((g) => g.id === currentPhaseId);
+    for (let i = currentIdx - 1; i >= 0; i--) {
+      const prevGroupId = STEP_GROUPS[i].id;
+      const targetStepIdx = activeSteps.findIndex((s) => s.groupId === prevGroupId);
+      if (targetStepIdx !== -1) {
+        flowActions.setCurrentStepIndex(targetStepIdx);
+        return;
+      }
+    }
+  }, [currentPhaseId, activeSteps]);
+
+  const handleNextPhase = useCallback(() => {
+    if (!currentPhaseId) return;
+    const currentIdx = STEP_GROUPS.findIndex((g) => g.id === currentPhaseId);
+    for (let i = currentIdx + 1; i < STEP_GROUPS.length; i++) {
+      const nextGroupId = STEP_GROUPS[i].id;
+      const targetStepIdx = activeSteps.findIndex((s) => s.groupId === nextGroupId);
+      if (targetStepIdx !== -1) {
+        flowActions.setCurrentStepIndex(targetStepIdx);
+        return;
+      }
+    }
+  }, [currentPhaseId, activeSteps]);
+
+  // === Stable dispatcher for the 1–8 digit keyboard shortcuts.
   const applyScenarioPresetByIndex = useCallback((idx: number) => {
     const preset = SCENARIO_PRESETS[idx];
     if (preset) {
@@ -373,16 +458,13 @@ function AppContent() {
     }
   }, []);
 
-  // Keyboard Navigation Support. Wrapped in useCallback so the listener
-  // identity is stable across renders and we don't thrash window event
-  // subscriptions.
+  // Keyboard Navigation Support.
+  // Designed for researchers to effortlessly simulate, step through, and inspect flows.
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // If typing in input, textarea, or contentEditable, never hijack keystrokes
     const activeElement = document.activeElement as HTMLElement | null;
     const tag = activeElement?.tagName;
     if (
-      e.altKey ||
-      e.ctrlKey ||
-      e.metaKey ||
       tag === 'INPUT' ||
       tag === 'TEXTAREA' ||
       tag === 'SELECT' ||
@@ -390,31 +472,150 @@ function AppContent() {
     ) {
       return;
     }
-    const len = flowStore.getState().activeSteps.length;
+
+    // Ignore modified keys (Ctrl, Alt, Meta) except Shift for specific navigation combos
+    if (e.altKey || e.ctrlKey || e.metaKey) {
+      return;
+    }
+
+    const currentUI = uiStore.getState();
+    const currentFlow = flowStore.getState();
+    const len = currentFlow.activeSteps.length;
+
+    // If Guided Tour is open, let TourGuide handle its own Arrow keys & Esc
+    if (isTourOpen) {
+      return;
+    }
+
+    // Escape closes modals or exits special modes in hierarchical order
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (currentUI.isShortcutsOpen) {
+        uiActions.setShortcutsOpen(false);
+      } else if (currentUI.readingMode) {
+        uiActions.setReadingMode(false);
+      } else if (currentUI.focusPhase) {
+        uiActions.setFocusPhase(false);
+      } else if (isLegendExpanded) {
+        setIsLegendExpanded(false);
+      }
+      return;
+    }
+
+    // Toggle Keyboard Shortcuts modal with '?' or '/'
+    if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+      e.preventDefault();
+      uiActions.toggleShortcuts();
+      return;
+    }
+
+    // If shortcuts modal is open, don't execute other canvas keys
+    if (currentUI.isShortcutsOpen) {
+      return;
+    }
+
+    // Phase navigation: ] or Shift+ArrowRight (next phase), [ or Shift+ArrowLeft (prev phase)
+    if (e.key === ']' || (e.shiftKey && e.key === 'ArrowRight')) {
+      e.preventDefault();
+      handleNextPhase();
+      return;
+    }
+    if (e.key === '[' || (e.shiftKey && e.key === 'ArrowLeft')) {
+      e.preventDefault();
+      handlePrevPhase();
+      return;
+    }
+
+    // Spacebar: Play / Pause simulation.
+    // If already at the end of the sequence, automatically restart and play from step 0.
+    if (e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar') {
+      e.preventDefault();
+      if (tag === 'BUTTON') {
+        activeElement?.blur();
+      }
+      flowActions.togglePlay();
+      return;
+    }
+
+    // ArrowRight: Advance step. Pauses autoplay so user has manual control.
     if (e.key === 'ArrowRight') {
       e.preventDefault();
-      flowActions.togglePlay();
+      flowActions.pause();
       flowActions.nextStep();
-    } else if (e.key === 'ArrowLeft') {
+      return;
+    }
+
+    // ArrowLeft: Previous step. Pauses autoplay so user has manual control.
+    if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      flowActions.togglePlay();
+      flowActions.pause();
       flowActions.prevStep();
-    } else if (e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar') {
-      e.preventDefault();
-      flowActions.togglePlay();
-    } else if (e.key === 'Home') {
+      return;
+    }
+
+    // R or Home: Reset to initial step (Step 0)
+    if (e.key === 'r' || e.key === 'R' || e.key === 'Home') {
       e.preventDefault();
       flowActions.reset();
-    } else if (e.key === 'End' && len > 0) {
+      return;
+    }
+
+    // End: Jump to last step
+    if (e.key === 'End' && len > 0) {
       e.preventDefault();
+      flowActions.pause();
       flowActions.setCurrentStepIndex(len - 1);
-    } else if (/^[1-8]$/.test(e.key)) {
-      // Digit shortcuts jump to scenario presets 1–8. The 8 presets are
-      // defined in SCENARIO_PRESETS in a stable order.
+      return;
+    }
+
+    // Speed cycling: > or . (faster), < or , (slower)
+    if (e.key === '>' || e.key === '.') {
+      e.preventDefault();
+      const speeds: PlaySpeed[] = [5000, 2500, 1500, 800];
+      const idx = speeds.indexOf(currentFlow.playSpeed);
+      const nextIdx = (idx + 1) % speeds.length;
+      flowActions.setPlaySpeed(speeds[nextIdx]);
+      return;
+    }
+    if (e.key === '<' || e.key === ',') {
+      e.preventDefault();
+      const speeds: PlaySpeed[] = [800, 1500, 2500, 5000];
+      const idx = speeds.indexOf(currentFlow.playSpeed);
+      const prevIdx = (idx - 1 + speeds.length) % speeds.length;
+      flowActions.setPlaySpeed(speeds[prevIdx]);
+      return;
+    }
+
+    // View modes toggles
+    if (e.key === 'f' || e.key === 'F') {
+      e.preventDefault();
+      uiActions.toggleFocusPhase();
+      return;
+    }
+    if (e.key === 'm' || e.key === 'M') {
+      e.preventDefault();
+      uiActions.toggleReadingMode();
+      return;
+    }
+    if (e.key === 'h' || e.key === 'H') {
+      e.preventDefault();
+      uiActions.toggleCanvasOrientation();
+      return;
+    }
+
+    // Digit shortcuts 1–8: Instant switch to scenario presets 1–8
+    if (/^[1-8]$/.test(e.key)) {
       e.preventDefault();
       applyScenarioPresetByIndex(Number(e.key) - 1);
+      return;
     }
-  }, [applyScenarioPresetByIndex]);
+  }, [
+    isTourOpen,
+    isLegendExpanded,
+    handleNextPhase,
+    handlePrevPhase,
+    applyScenarioPresetByIndex,
+  ]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown, { capture: true });
@@ -433,7 +634,7 @@ function AppContent() {
       fitView({ duration: 350, padding: 0.15 });
     }, 280);
     return () => clearTimeout(timer);
-  }, [isLeftCollapsed, isRightCollapsed, activeSteps.length, fitView]);
+  }, [isLeftCollapsed, isRightCollapsed, activeSteps.length, fitView, canvasOrientation]);
 
   // === Group visibility helpers (delegated to flowActions). ===
   const toggleGroupVisibility = useCallback((groupId: StepGroupId) => {
@@ -455,11 +656,7 @@ function AppContent() {
     flowStore.setState((s) => ({ ...s, hiddenGroups: [...all] }));
   }, []);
 
-  // Camera glide management: when the active step changes, smoothly glide the viewport
-  // Camera glide & focus management: when the active step changes, smoothly glide the viewport
-  // to center directly on the active step interaction (between source and target participants)
-  // at an optimal zoom level (0.84) so the payload, message labels, and participants are
-  // perfectly framed in the center of the user's viewport.
+  // Camera glide & focus management: when active step changes, center viewport smoothly
   const reactFlow = useReactFlow();
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -472,19 +669,34 @@ function AppContent() {
 
     if (!currentStep) return;
 
-    // Calculate true center of the active step interaction
-    const srcX = currentStep.source ? (X_COORDS[currentStep.source] ?? 800) : 800;
-    const tgtX = currentStep.target ? (X_COORDS[currentStep.target] ?? srcX) : srcX;
-    const stepCenterX = (srcX + tgtX) / 2;
-    const stepCenterY = 140 + currentStepIndex * 90;
+    // Preserve the researcher's preferred zoom level instead of forcibly resetting it
+    const preferredZoom = reactFlow.getZoom() || 0.84;
 
-    try {
-      reactFlow.setCenter(stepCenterX, stepCenterY, { zoom: 0.84, duration: 400 });
-    } catch {
-      // Fallback silently if reactFlow is not ready.
+    if (canvasOrientation === 'horizontal') {
+      const srcY = currentStep.source ? (Y_COORDS_HORIZONTAL[currentStep.source] ?? 380) : 380;
+      const tgtY = currentStep.target ? (Y_COORDS_HORIZONTAL[currentStep.target] ?? srcY) : srcY;
+      const stepCenterY = (srcY + tgtY) / 2;
+      const stepCenterX = STEP_X_BASE_HORIZONTAL + currentStepIndex * STEP_X_GAP_HORIZONTAL;
+
+      try {
+        reactFlow.setCenter(stepCenterX, stepCenterY, { zoom: preferredZoom, duration: 400 });
+      } catch {
+        // Fallback silently if reactFlow is not ready.
+      }
+    } else {
+      const srcX = currentStep.source ? (X_COORDS[currentStep.source] ?? 800) : 800;
+      const tgtX = currentStep.target ? (X_COORDS[currentStep.target] ?? srcX) : srcX;
+      const stepCenterX = (srcX + tgtX) / 2;
+      const stepCenterY = 140 + currentStepIndex * 90;
+
+      try {
+        reactFlow.setCenter(stepCenterX, stepCenterY, { zoom: preferredZoom, duration: 400 });
+      } catch {
+        // Fallback silently if reactFlow is not ready.
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStepIndex, currentStep, reactFlow]);
+  }, [currentStepIndex, currentStep, reactFlow, canvasOrientation]);
 
   // === Build the graph. We split nodes and edges into two useMemo
   // === invocations so each one returns a stable array reference, not a
@@ -492,256 +704,522 @@ function AppContent() {
   // === its internal store and a stable shape is critical to prevent
   // === re-mounting nodes during reconciliation.
   const graphArgs = useMemo(
-    () => ({ scenario, activeSteps, currentStepIndex, theme, currentStep }),
-    [scenario, activeSteps, currentStepIndex, theme, currentStep]
+    () => ({ scenario, activeSteps, currentStepIndex, theme, currentStep, canvasOrientation, focusPhase }),
+    [scenario, activeSteps, currentStepIndex, theme, currentStep, canvasOrientation, focusPhase]
   );
 
   const nodes: Node[] = useMemo(() => {
     const nodesList: Node[] = [];
-    const lifelineLength = Math.max(1100, 180 + activeSteps.length * 90);
+    const isHorizontal = canvasOrientation === 'horizontal';
+    const lifelineLength = isHorizontal
+      ? Math.max(1600, 320 + activeSteps.length * STEP_X_GAP_HORIZONTAL)
+      : Math.max(1100, 180 + activeSteps.length * 90);
 
     const STEP_Y_GAP = 90;
     const STEP_Y_BASE = 140;
-    const groupYRange: Record<string, { min: number; max: number; count: number }> = {};
+
+    const groupRange: Record<string, { min: number; max: number; count: number }> = {};
     activeSteps.forEach((step, idx) => {
       if (!step.groupId) return;
-      const y = STEP_Y_BASE + idx * STEP_Y_GAP;
-      if (!groupYRange[step.groupId]) {
-        groupYRange[step.groupId] = { min: y, max: y, count: 0 };
+      const coord = isHorizontal
+        ? STEP_X_BASE_HORIZONTAL + idx * STEP_X_GAP_HORIZONTAL
+        : STEP_Y_BASE + idx * STEP_Y_GAP;
+      if (!groupRange[step.groupId]) {
+        groupRange[step.groupId] = { min: coord, max: coord, count: 0 };
       }
-      groupYRange[step.groupId].min = Math.min(groupYRange[step.groupId].min, y);
-      groupYRange[step.groupId].max = Math.max(groupYRange[step.groupId].max, y);
-      groupYRange[step.groupId].count += 1;
+      groupRange[step.groupId].min = Math.min(groupRange[step.groupId].min, coord);
+      groupRange[step.groupId].max = Math.max(groupRange[step.groupId].max, coord);
+      groupRange[step.groupId].count += 1;
     });
 
-    const visibleGroups = STEP_GROUPS.filter((g) => groupYRange[g.id]?.count > 0);
+    const visibleGroups = STEP_GROUPS.filter((g) => groupRange[g.id]?.count > 0);
     const phaseIndexById: Record<string, number> = {};
     visibleGroups.forEach((g, i) => {
       phaseIndexById[g.id] = i + 1;
     });
 
-    const bandX = X_COORDS.CH - 110;
-    const bandWidth = X_COORDS.ACS - X_COORDS.CH + 220;
+    if (isHorizontal) {
+      // Step group bands in horizontal layout (vertical columns spanning across all participant rows)
+      STEP_GROUPS.forEach((g) => {
+        const range = groupRange[g.id];
+        if (!range || range.count === 0) return;
+        const x = range.min - 35;
+        const width = range.max - range.min + 70;
+        nodesList.push({
+          id: `stepgroup_${g.id}`,
+          type: 'stepGroupBand',
+          position: { x, y: 50 },
+          data: {
+            title: g.title,
+            color: g.color,
+            width,
+            height: 770,
+            isCurrent: currentStep?.groupId === g.id,
+            groupId: g.id,
+            phaseIndex: phaseIndexById[g.id] ?? 0,
+            stepCount: range.count,
+            introducedIn: g.introducedIn,
+            activeVersion: scenario.protocolVersion,
+            focusPhase,
+            orientation: 'horizontal',
+          },
+          draggable: false,
+          selectable: true,
+        });
+      });
 
-    STEP_GROUPS.forEach((g) => {
-      const range = groupYRange[g.id];
-      if (!range || range.count === 0) return;
-      const y = range.min - 30;
-      const height = range.max - range.min + 60;
+      // Domain containers in horizontal layout (stacked domain rows)
       nodesList.push({
-        id: `stepgroup_${g.id}`,
-        type: 'stepGroupBand',
-        position: { x: bandX, y },
+        id: 'domain_acquirer',
+        type: 'domainContainer',
+        position: { x: 20, y: 50 },
         data: {
-          title: g.title,
-          color: g.color,
-          width: bandWidth,
-          height,
-          isCurrent: currentStep?.groupId === g.id,
-          phaseIndex: phaseIndexById[g.id] ?? 0,
-          stepCount: range.count,
-          // Forward both the phase's introducedIn and the active scenario
-          // version so the band can render a version diff badge. The
-          // store already filtered out groups that are too new for the
-          // active version, so this badge is informational and helps
-          // readers cross-reference the EMVCo spec.
-          introducedIn: g.introducedIn,
-          activeVersion: scenario.protocolVersion,
+          title: 'Acquirer Domain',
+          subtitle: 'Merchant & 3DS Requestor Environment',
+          color: '#2563eb',
+          width: lifelineLength + 60,
+          height: 480,
         },
         draggable: false,
         selectable: true,
       });
-    });
-
-    nodesList.push({
-      id: 'domain_acquirer',
-      type: 'domainContainer',
-      position: { x: X_COORDS.CH - 110, y: -20 },
-      data: {
-        title: 'Acquirer Domain',
-        subtitle: 'Merchant & 3DS Requestor Environment',
-        color: '#2563eb',
-        width: X_COORDS.S - X_COORDS.CH + 220,
-        height: lifelineLength + 60,
-      },
-      draggable: false,
-      selectable: true,
-    });
-
-    nodesList.push({
-      id: 'domain_interop',
-      type: 'domainContainer',
-      position: { x: X_COORDS.DS - 110, y: -20 },
-      data: {
-        title: 'Interoperability Domain',
-        subtitle: 'Payment System Directory Server',
-        color: '#8b5cf6',
-        width: 220,
-        height: lifelineLength + 60,
-      },
-      draggable: false,
-      selectable: true,
-    });
-
-    nodesList.push({
-      id: 'domain_issuer',
-      type: 'domainContainer',
-      position: { x: X_COORDS.ACS - 110, y: -20 },
-      data: {
-        title: 'Issuer Domain',
-        subtitle: 'Card Issuer Access Control Server',
-        color: '#10b981',
-        width: 220,
-        height: lifelineLength + 60,
-      },
-      draggable: false,
-      selectable: true,
-    });
-
-    const laneWidth = 220;
-    scenarioParticipants.forEach((p) => {
-      const isActorActive =
-        !!currentStep &&
-        (p.id === currentStep.source || p.id === currentStep.target);
-      nodesList.push({
-        id: `swimlane_${p.id}`,
-        type: 'swimlaneColumn',
-        position: { x: X_COORDS[p.id] - laneWidth / 2, y: 0 },
-        data: {
-          stroke: p.stroke,
-          bg: p.bg,
-          isActive: isActorActive,
-          width: laneWidth,
-          height: lifelineLength + 80,
-          label: p.id,
-          fullName: p.fullName,
-        },
-        draggable: false,
-        selectable: false,
-      });
-    });
-
-    scenarioParticipants.forEach((p) => {
-      const isActorActive = !!currentStep && (p.id === currentStep.source || p.id === currentStep.target);
 
       nodesList.push({
-        id: `header_${p.id}`,
-        type: 'participantHeader',
-        position: { x: X_COORDS[p.id] - 80, y: 15 },
+        id: 'domain_interop',
+        type: 'domainContainer',
+        position: { x: 20, y: 560 },
         data: {
-          id: p.id,
-          name: p.name,
-          fullName: p.fullName,
-          color: p.color,
-          stroke: p.stroke,
-          bg: p.bg,
-          isActive: isActorActive,
+          title: 'Interoperability Domain',
+          subtitle: 'Payment System Directory Server',
+          color: '#8b5cf6',
+          width: lifelineLength + 60,
+          height: 120,
         },
         draggable: false,
+        selectable: true,
       });
 
       nodesList.push({
-        id: `lifeline_bottom_${p.id}`,
-        position: { x: X_COORDS[p.id] - 14, y: lifelineLength - 4 },
+        id: 'domain_issuer',
+        type: 'domainContainer',
+        position: { x: 20, y: 700 },
         data: {
-          label: '',
-          color: p.stroke,
-          isActive: isActorActive,
-        },
-        type: 'lifelineBottom',
-        draggable: false,
-      });
-    });
-
-    activeSteps.forEach((step, idx) => {
-      const stepY = 140 + idx * 90;
-      const isActive = idx <= currentStepIndex;
-      const isCurrent = idx === currentStepIndex;
-      const isError = /err|invalid/i.test(step.num) || step.id.includes('err') || step.id.includes('invalid');
-
-      const railSource = step.source
-        ? participantsById.get(step.source)
-        : undefined;
-      const railColor = railSource ? railSource.stroke : '#6366f1';
-      nodesList.push({
-        id: `rail_${step.id}`,
-        type: 'stepNumberRail',
-        position: { x: STEP_RAIL_X, y: stepY - 18 },
-        data: {
-          num: step.num,
-          label: step.label,
-          isActive,
-          isCurrent,
-          color: railColor,
+          title: 'Issuer Domain',
+          subtitle: 'Card Issuer Access Control Server',
+          color: '#10b981',
+          width: lifelineLength + 60,
+          height: 120,
         },
         draggable: false,
-        selectable: false,
-        zIndex: 5,
+        selectable: true,
       });
 
-      if (step.source && step.target) {
-        const sourcePart = participantsById.get(step.source);
-        const sourceColor = sourcePart ? sourcePart.stroke : '#6366f1';
+      // Participant headers and lifeline terminal caps
+      scenarioParticipants.forEach((p) => {
+        const pY = Y_COORDS_HORIZONTAL[p.id] ?? 110;
+        const isActorActive = !!currentStep && (p.id === currentStep.source || p.id === currentStep.target);
 
         nodesList.push({
-          id: `anchor_source_${step.id}`,
-          type: 'lifelineAnchor',
-          position: { x: X_COORDS[step.source] - 5, y: stepY },
+          id: `header_${p.id}`,
+          type: 'participantHeader',
+          position: { x: 30, y: pY - 32 },
           data: {
-            isActive,
-            isHighlighted: isCurrent,
-            color: sourceColor,
+            id: p.id,
+            name: p.name,
+            fullName: p.fullName,
+            color: p.color,
+            stroke: p.stroke,
+            bg: p.bg,
+            isActive: isActorActive,
+            orientation: 'horizontal',
+            focusPhase,
           },
           draggable: false,
         });
 
         nodesList.push({
-          id: `anchor_target_${step.id}`,
-          type: 'lifelineAnchor',
-          position: { x: X_COORDS[step.target] - 5, y: stepY },
+          id: `lifeline_bottom_${p.id}`,
+          position: { x: lifelineLength, y: pY - 14 },
           data: {
-            isActive,
-            isHighlighted: isCurrent,
-            color: sourceColor,
+            label: '',
+            color: p.stroke,
+            isActive: isActorActive,
+            orientation: 'horizontal',
           },
+          type: 'lifelineBottom',
           draggable: false,
         });
-      } else if (step.source) {
-        const p = participantsById.get(step.source);
-        const pColor = p ? p.stroke : '#6366f1';
-        const boxX = step.source === 'ACS'
-          ? X_COORDS[step.source] - 210
-          : X_COORDS[step.source] + 20;
+      });
+
+      // Steps in horizontal layout
+      activeSteps.forEach((step, idx) => {
+        const stepX = STEP_X_BASE_HORIZONTAL + idx * STEP_X_GAP_HORIZONTAL;
+        const isActive = idx <= currentStepIndex;
+        const isCurrent = idx === currentStepIndex;
+        const isError = /err|invalid/i.test(step.num) || step.id.includes('err') || step.id.includes('invalid');
+        const isCurrentGroup = !!step.groupId && step.groupId === currentStep?.groupId;
+
+        const railSource = step.source ? participantsById.get(step.source) : undefined;
+        const railColor = railSource ? railSource.stroke : '#6366f1';
 
         nodesList.push({
-          id: `internal_${step.id}`,
-          type: 'internalStep',
-          position: { x: boxX, y: stepY - 8 },
+          id: `rail_${step.id}`,
+          type: 'stepNumberRail',
+          position: { x: stepX - 34, y: STEP_RAIL_Y_HORIZONTAL },
           data: {
             num: step.num,
             label: step.label,
-            isHighlighted: isCurrent,
             isActive,
-            color: p?.color || '#1e1b4b',
-            stroke: pColor,
-            isError,
+            isCurrent,
+            color: railColor,
+            stepGroupId: step.groupId,
+            isCurrentGroup,
+            focusPhase,
+            orientation: 'horizontal',
+          },
+          draggable: false,
+          selectable: false,
+          zIndex: 5,
+        });
+
+        if (step.source && step.target) {
+          const sourcePart = participantsById.get(step.source);
+          const sourceColor = sourcePart ? sourcePart.stroke : '#6366f1';
+          const srcY = Y_COORDS_HORIZONTAL[step.source] ?? 110;
+          const tgtY = Y_COORDS_HORIZONTAL[step.target] ?? 110;
+
+          nodesList.push({
+            id: `anchor_source_${step.id}`,
+            type: 'lifelineAnchor',
+            position: { x: stepX - 18, y: srcY - 5 },
+            data: {
+              isActive,
+              isHighlighted: isCurrent,
+              color: sourceColor,
+              stepGroupId: step.groupId,
+              isCurrentGroup,
+              focusPhase,
+              orientation: 'horizontal',
+            },
+            draggable: false,
+          });
+
+          nodesList.push({
+            id: `anchor_target_${step.id}`,
+            type: 'lifelineAnchor',
+            position: { x: stepX - 18, y: tgtY - 5 },
+            data: {
+              isActive,
+              isHighlighted: isCurrent,
+              color: sourceColor,
+              stepGroupId: step.groupId,
+              isCurrentGroup,
+              focusPhase,
+              orientation: 'horizontal',
+            },
+            draggable: false,
+          });
+        } else if (step.source) {
+          const p = participantsById.get(step.source);
+          const pColor = p ? p.stroke : '#6366f1';
+          const srcY = Y_COORDS_HORIZONTAL[step.source] ?? 110;
+
+          nodesList.push({
+            id: `internal_${step.id}`,
+            type: 'internalStep',
+            position: { x: stepX - 80, y: srcY + 18 },
+            zIndex: isCurrent ? 12 : 6,
+            data: {
+              num: step.num,
+              label: step.label,
+              isHighlighted: isCurrent,
+              isActive,
+              color: p?.color || '#1e1b4b',
+              stroke: pColor,
+              isError,
+              stepGroupId: step.groupId,
+              isCurrentGroup,
+              focusPhase,
+              orientation: 'horizontal',
+            },
+            draggable: false,
+          });
+
+          nodesList.push({
+            id: `anchor_source_${step.id}`,
+            type: 'lifelineAnchor',
+            position: { x: stepX - 18, y: srcY - 5 },
+            zIndex: 8,
+            data: {
+              isActive,
+              isHighlighted: isCurrent,
+              color: pColor,
+              stepGroupId: step.groupId,
+              isCurrentGroup,
+              focusPhase,
+              orientation: 'horizontal',
+            },
+            draggable: false,
+          });
+        }
+      });
+    } else {
+      // Vertical layout
+      const bandX = X_COORDS.CH - 110;
+      const bandWidth = X_COORDS.ACS - X_COORDS.CH + 220;
+
+      STEP_GROUPS.forEach((g) => {
+        const range = groupRange[g.id];
+        if (!range || range.count === 0) return;
+        const y = range.min - 30;
+        const height = range.max - range.min + 60;
+        nodesList.push({
+          id: `stepgroup_${g.id}`,
+          type: 'stepGroupBand',
+          position: { x: bandX, y },
+          zIndex: -1,
+          data: {
+            title: g.title,
+            color: g.color,
+            width: bandWidth,
+            height,
+            isCurrent: currentStep?.groupId === g.id,
+            groupId: g.id,
+            phaseIndex: phaseIndexById[g.id] ?? 0,
+            stepCount: range.count,
+            introducedIn: g.introducedIn,
+            activeVersion: scenario.protocolVersion,
+            focusPhase,
+            orientation: 'vertical',
+          },
+          draggable: false,
+          selectable: true,
+        });
+      });
+
+      nodesList.push({
+        id: 'domain_acquirer',
+        type: 'domainContainer',
+        position: { x: X_COORDS.CH - 110, y: -20 },
+        zIndex: -2,
+        data: {
+          title: 'Acquirer Domain',
+          subtitle: 'Merchant & 3DS Requestor Environment',
+          color: '#2563eb',
+          width: X_COORDS.S - X_COORDS.CH + 220,
+          height: lifelineLength + 60,
+        },
+        draggable: false,
+        selectable: true,
+      });
+
+      nodesList.push({
+        id: 'domain_interop',
+        type: 'domainContainer',
+        position: { x: X_COORDS.DS - 110, y: -20 },
+        zIndex: -2,
+        data: {
+          title: 'Interoperability Domain',
+          subtitle: 'Payment System Directory Server',
+          color: '#8b5cf6',
+          width: 220,
+          height: lifelineLength + 60,
+        },
+        draggable: false,
+        selectable: true,
+      });
+
+      nodesList.push({
+        id: 'domain_issuer',
+        type: 'domainContainer',
+        position: { x: X_COORDS.ACS - 110, y: -20 },
+        zIndex: -2,
+        data: {
+          title: 'Issuer Domain',
+          subtitle: 'Card Issuer Access Control Server',
+          color: '#10b981',
+          width: 220,
+          height: lifelineLength + 60,
+        },
+        draggable: false,
+        selectable: true,
+      });
+
+      const laneWidth = 220;
+      scenarioParticipants.forEach((p) => {
+        const isActorActive =
+          !!currentStep &&
+          (p.id === currentStep.source || p.id === currentStep.target);
+        nodesList.push({
+          id: `swimlane_${p.id}`,
+          type: 'swimlaneColumn',
+          position: { x: X_COORDS[p.id] - laneWidth / 2, y: 0 },
+          zIndex: -1,
+          data: {
+            stroke: p.stroke,
+            bg: p.bg,
+            isActive: isActorActive,
+            width: laneWidth,
+            height: lifelineLength + 80,
+            label: p.id,
+            fullName: p.fullName,
+          },
+          draggable: false,
+          selectable: false,
+        });
+      });
+
+      scenarioParticipants.forEach((p) => {
+        const isActorActive = !!currentStep && (p.id === currentStep.source || p.id === currentStep.target);
+
+        nodesList.push({
+          id: `header_${p.id}`,
+          type: 'participantHeader',
+          position: { x: X_COORDS[p.id] - 80, y: 15 },
+          data: {
+            id: p.id,
+            name: p.name,
+            fullName: p.fullName,
+            color: p.color,
+            stroke: p.stroke,
+            bg: p.bg,
+            isActive: isActorActive,
+            orientation: 'vertical',
+            focusPhase,
           },
           draggable: false,
         });
 
         nodesList.push({
-          id: `anchor_source_${step.id}`,
-          type: 'lifelineAnchor',
-          position: { x: X_COORDS[step.source] - 5, y: stepY },
+          id: `lifeline_bottom_${p.id}`,
+          position: { x: X_COORDS[p.id] - 14, y: lifelineLength - 4 },
           data: {
-            isActive,
-            isHighlighted: isCurrent,
-            color: pColor,
+            label: '',
+            color: p.stroke,
+            isActive: isActorActive,
+            orientation: 'vertical',
           },
+          type: 'lifelineBottom',
           draggable: false,
         });
-      }
-    });
+      });
+
+      activeSteps.forEach((step, idx) => {
+        const stepY = 140 + idx * 90;
+        const isActive = idx <= currentStepIndex;
+        const isCurrent = idx === currentStepIndex;
+        const isError = /err|invalid/i.test(step.num) || step.id.includes('err') || step.id.includes('invalid');
+        const isCurrentGroup = !!step.groupId && step.groupId === currentStep?.groupId;
+
+        const railSource = step.source
+          ? participantsById.get(step.source)
+          : undefined;
+        const railColor = railSource ? railSource.stroke : '#6366f1';
+        nodesList.push({
+          id: `rail_${step.id}`,
+          type: 'stepNumberRail',
+          position: { x: STEP_RAIL_X, y: stepY - 18 },
+          data: {
+            num: step.num,
+            label: step.label,
+            isActive,
+            isCurrent,
+            color: railColor,
+            stepGroupId: step.groupId,
+            isCurrentGroup,
+            focusPhase,
+            orientation: 'vertical',
+          },
+          draggable: false,
+          selectable: false,
+          zIndex: 5,
+        });
+
+        if (step.source && step.target) {
+          const sourcePart = participantsById.get(step.source);
+          const sourceColor = sourcePart ? sourcePart.stroke : '#6366f1';
+
+          nodesList.push({
+            id: `anchor_source_${step.id}`,
+            type: 'lifelineAnchor',
+            position: { x: X_COORDS[step.source] - 5, y: stepY },
+            data: {
+              isActive,
+              isHighlighted: isCurrent,
+              color: sourceColor,
+              stepGroupId: step.groupId,
+              isCurrentGroup,
+              focusPhase,
+              orientation: 'vertical',
+            },
+            draggable: false,
+          });
+
+          nodesList.push({
+            id: `anchor_target_${step.id}`,
+            type: 'lifelineAnchor',
+            position: { x: X_COORDS[step.target] - 5, y: stepY },
+            data: {
+              isActive,
+              isHighlighted: isCurrent,
+              color: sourceColor,
+              stepGroupId: step.groupId,
+              isCurrentGroup,
+              focusPhase,
+              orientation: 'vertical',
+            },
+            draggable: false,
+          });
+        } else if (step.source) {
+          const p = participantsById.get(step.source);
+          const pColor = p ? p.stroke : '#6366f1';
+          const isAcs = step.source === 'ACS';
+          const cardWidth = 200;
+          const boxX = isAcs
+            ? X_COORDS[step.source] - cardWidth - 25
+            : X_COORDS[step.source] + 25;
+
+          nodesList.push({
+            id: `internal_${step.id}`,
+            type: 'internalStep',
+            position: { x: boxX, y: stepY - 8 },
+            zIndex: isCurrent ? 12 : 6,
+            data: {
+              num: step.num,
+              label: step.label,
+              isHighlighted: isCurrent,
+              isActive,
+              color: p?.color || '#1e1b4b',
+              stroke: pColor,
+              isError,
+              stepGroupId: step.groupId,
+              isCurrentGroup,
+              focusPhase,
+              orientation: 'vertical',
+              placement: isAcs ? 'left' : 'right',
+            },
+            draggable: false,
+          });
+
+          nodesList.push({
+            id: `anchor_source_${step.id}`,
+            type: 'lifelineAnchor',
+            position: { x: X_COORDS[step.source] - 5, y: stepY },
+            zIndex: 8,
+            data: {
+              isActive,
+              isHighlighted: isCurrent,
+              color: pColor,
+              stepGroupId: step.groupId,
+              isCurrentGroup,
+              focusPhase,
+              orientation: 'vertical',
+            },
+            draggable: false,
+          });
+        }
+      });
+    }
 
     return nodesList;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -749,7 +1227,7 @@ function AppContent() {
 
   const edges: Edge[] = useMemo(() => {
     const edgesList: Edge[] = [];
-    const lifelineLength = Math.max(1100, 180 + activeSteps.length * 90);
+    const isHorizontal = canvasOrientation === 'horizontal';
 
     scenarioParticipants.forEach((p) => {
       const isActorActive = !!currentStep && (p.id === currentStep.source || p.id === currentStep.target);
@@ -757,8 +1235,10 @@ function AppContent() {
         id: `lifeline_edge_${p.id}`,
         source: `header_${p.id}`,
         target: `lifeline_bottom_${p.id}`,
+        sourceHandle: isHorizontal ? 'lifeline-start-right' : undefined,
+        targetHandle: isHorizontal ? 'lifeline-end-left' : undefined,
         type: 'straight',
-        zIndex: 1,
+        zIndex: 0,
         className: isActorActive ? 'active-lifeline' : '',
         style: isActorActive
           ? {
@@ -770,7 +1250,7 @@ function AppContent() {
           : {
               stroke: theme === 'dark' ? 'rgba(200, 214, 229, 0.55)' : 'rgba(13, 62, 92, 0.45)',
               strokeWidth: 1.75,
-              opacity: 0.85,
+              opacity: focusPhase ? 0.35 : 0.85,
             },
         interactionWidth: 0,
         focusable: false,
@@ -785,15 +1265,21 @@ function AppContent() {
       const sourcePart = participantsById.get(step.source);
       const sourceColor = sourcePart ? sourcePart.stroke : '#6366f1';
 
-      const isSourceLeft = X_COORDS[step.source] < X_COORDS[step.target];
-      const sourceHandle = isSourceLeft ? 'right' : 'left';
-      const targetHandle = isSourceLeft ? 'left' : 'right';
+      let sourceHandle: string;
+      let targetHandle: string;
+
+      if (isHorizontal) {
+        const isSourceAbove = (Y_COORDS_HORIZONTAL[step.source] ?? 0) < (Y_COORDS_HORIZONTAL[step.target] ?? 0);
+        sourceHandle = isSourceAbove ? 'bottom' : 'top';
+        targetHandle = isSourceAbove ? 'top' : 'bottom';
+      } else {
+        const isSourceLeft = X_COORDS[step.source] < X_COORDS[step.target];
+        sourceHandle = isSourceLeft ? 'right' : 'left';
+        targetHandle = isSourceLeft ? 'left' : 'right';
+      }
 
       let fieldsPreview: string[] = [];
       let msgType = '';
-      // === Resolve the payload through the versioned registry so the
-      // === preview reflects the active protocol version, not the
-      // === function form (or the stale inline object).
       const resolvedPayload = getDynamicPayload(step, scenario);
       if (resolvedPayload) {
         const keys = Object.keys(resolvedPayload);
@@ -822,23 +1308,13 @@ function AppContent() {
 
       const isError = /err|invalid/i.test(step.num) || step.id.includes('err') || step.id.includes('invalid');
 
-      // === Edge label staggering (audit Pillar 2 #4) ===
-      // When two steps have the same source → target pair, their edge
-      // labels overlap. We compute a yOffset based on how many earlier
-      // parallel edges have been rendered to this pair, and pass it to
-      // the EdgeLabelRenderer through `data.yOffset`. CustomEdge then
-      // translates the label vertically.
       const pairKey = `${step.source}->${step.target}`;
       const parallelCount = activeSteps
         .slice(0, idx)
         .filter((s) => s.source && s.target && `${s.source}->${s.target}` === pairKey)
         .length;
-      const yOffset = parallelCount * 22; // 22px per parallel edge
+      const offset = parallelCount * 22;
 
-      // === Selected edge state (audit Pillar 2 #5) ===
-      // If this step is the user's selected step, the edge gets a thicker
-      // stroke and a glow. The same edge label gets aria-current="true"
-      // so screen readers announce it as the current context.
       const isSelected = detailsContext.kind === 'step' && detailsContext.stepId === step.id;
 
       edgesList.push({
@@ -850,8 +1326,6 @@ function AppContent() {
         type: 'messageEdge',
         zIndex: 1,
         label: step.label,
-        // xyflow reads `selected` on the edge object; we set it explicitly
-        // so the right-panel click on the step also highlights the edge.
         selected: isSelected,
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -864,16 +1338,19 @@ function AppContent() {
           isCurrent,
           isError,
           isSelected,
-          yOffset,
+          yOffset: isHorizontal ? 0 : offset,
+          xOffset: isHorizontal ? offset : 0,
           stepNum: step.num,
+          stepGroupId: step.groupId,
+          isCurrentGroup: !!step.groupId && step.groupId === currentStep?.groupId,
+          focusPhase,
+          orientation: isHorizontal ? 'horizontal' : 'vertical',
           fieldsPreview: fieldsPreview.slice(0, 4),
           msgType,
         },
       });
     });
 
-    // silence unused-var warnings for the dynamic lifeline length
-    void lifelineLength;
     return edgesList;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphArgs]);
@@ -982,6 +1459,10 @@ function AppContent() {
           currentStepIndex: state.currentStepIndex,
           theme: ui.theme,
           securityLensEnabled: ui.securityLensEnabled,
+          hiddenGroups: state.hiddenGroups,
+          canvasOrientation: ui.canvasOrientation,
+          readingMode: ui.readingMode,
+          focusPhase: ui.focusPhase,
         },
       });
 
@@ -1542,8 +2023,54 @@ function AppContent() {
                 </div>
               </div>
 
-              {/* Right: Floating Menu Pill when top bar is collapsed */}
+              {/* Right: Unified mode controls and floating menu pill */}
               <div className="canvas-header-right">
+                <div className="canvas-mode-group" role="group" aria-label="Canvas mode controls">
+                  <button
+                    type="button"
+                    className={`canvas-mode-btn ${readingMode ? 'is-active' : ''}`}
+                    onClick={() => uiActions.toggleReadingMode()}
+                    title={readingMode ? 'Exit reading mode (Esc)' : 'Enter reading mode — distraction-free reading with story deck'}
+                    aria-label={readingMode ? 'Exit reading mode' : 'Enter reading mode'}
+                    aria-pressed={readingMode}
+                  >
+                    <BookOpen size={12} />
+                    <span>Read</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`canvas-mode-btn ${focusPhase ? 'is-active' : ''}`}
+                    onClick={() => uiActions.toggleFocusPhase()}
+                    title={focusPhase ? 'Show all phases again' : 'Focus current phase — isolate and spotlight active phase'}
+                    aria-label={focusPhase ? 'Show all phases' : 'Focus current phase'}
+                    aria-pressed={focusPhase}
+                  >
+                    <Focus size={12} />
+                    <span>Focus</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`canvas-mode-btn ${canvasOrientation === 'horizontal' ? 'is-active' : ''}`}
+                    onClick={() => uiActions.toggleCanvasOrientation()}
+                    title={canvasOrientation === 'horizontal' ? 'Switch back to vertical sequence diagram' : 'Switch to horizontal left-to-right sequence diagram'}
+                    aria-label={canvasOrientation === 'horizontal' ? 'Switch sequence canvas to vertical mode' : 'Switch sequence canvas to horizontal mode'}
+                    aria-pressed={canvasOrientation === 'horizontal'}
+                  >
+                    <ArrowLeftRight size={12} />
+                    <span>{canvasOrientation === 'horizontal' ? 'Horizontal' : 'Vertical'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`canvas-mode-btn ${isShortcutsOpen ? 'is-active' : ''}`}
+                    onClick={() => uiActions.toggleShortcuts()}
+                    title="Keyboard shortcuts reference (?)"
+                    aria-label="Keyboard shortcuts"
+                    aria-pressed={isShortcutsOpen}
+                  >
+                    <Keyboard size={12} />
+                    <span>Shortcuts</span>
+                  </button>
+                </div>
                 {isTopBarCollapsed && (
                   <div
                     className="top-bar-floating-pill"
@@ -1596,7 +2123,131 @@ function AppContent() {
             </div>
           )}
 
-          <div className="canvas-flow-shell">
+          <div
+            ref={sequenceShellRef}
+            className={`canvas-flow-shell ${canvasOrientation === 'horizontal' ? 'is-horizontal' : ''} ${readingMode ? 'is-reading-mode' : ''} ${focusPhase ? 'is-focus-phase' : ''}`}
+          >
+            {/* Phase Focus Spotlight HUD banner */}
+            {focusPhase && currentPhase && (
+              <div className="phase-focus-hud" role="region" aria-label="Phase focus controls">
+                <span className="phase-focus-hud-pill">
+                  <Focus size={13} style={{ color: currentPhase.color }} />
+                  <span>{currentPhase.title} ({currentPhaseSteps.length} step{currentPhaseSteps.length === 1 ? '' : 's'})</span>
+                </span>
+                <button
+                  type="button"
+                  className="phase-focus-hud-btn"
+                  onClick={handlePrevPhase}
+                  title="Go to previous phase"
+                  aria-label="Previous phase"
+                >
+                  <ChevronLeft size={12} />
+                  <span>Prev</span>
+                </button>
+                <button
+                  type="button"
+                  className="phase-focus-hud-btn"
+                  onClick={handleNextPhase}
+                  title="Go to next phase"
+                  aria-label="Next phase"
+                >
+                  <span>Next</span>
+                  <ChevronRight size={12} />
+                </button>
+                <button
+                  type="button"
+                  className="phase-focus-hud-btn"
+                  onClick={() => uiActions.setFocusPhase(false)}
+                  title="Exit phase focus"
+                  aria-label="Exit phase focus"
+                >
+                  <X size={11} />
+                  <span>Exit</span>
+                </button>
+              </div>
+            )}
+
+            {/* Reading Mode Zen Story Deck */}
+            {readingMode && currentStep && (
+              <aside className="reader-story-deck" aria-label="Protocol Reader">
+                <div className="reader-deck-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className="reader-deck-phase-tag" style={{ color: currentPhase?.color || 'var(--accent-primary)' }}>
+                      {currentPhase?.title || 'PROTOCOL STEP'}
+                    </span>
+                    <span className="reader-deck-step-badge">
+                      Step {currentStepIndex + 1} of {activeSteps.length} (Step {currentStep.num})
+                    </span>
+                  </div>
+                  <div className="reader-deck-nav">
+                    <button
+                      type="button"
+                      className="reader-nav-btn"
+                      onClick={() => flowActions.prevStep()}
+                      disabled={currentStepIndex === 0}
+                      title="Previous step (ArrowLeft)"
+                      aria-label="Previous step"
+                    >
+                      <ChevronLeft size={13} />
+                      <span>Prev</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="reader-nav-btn"
+                      onClick={() => flowActions.nextStep()}
+                      disabled={currentStepIndex >= activeSteps.length - 1}
+                      title="Next step (ArrowRight or Space)"
+                      aria-label="Next step"
+                    >
+                      <span>Next</span>
+                      <ChevronRight size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className="reader-nav-btn"
+                      onClick={() => uiActions.setReadingMode(false)}
+                      title="Exit reading mode (Escape)"
+                      aria-label="Exit reading mode"
+                      style={{ marginLeft: '4px' }}
+                    >
+                      <X size={12} />
+                      <span>Exit</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="reader-deck-title">
+                  {currentStep.label}
+                </div>
+                <div className="reader-deck-body">
+                  {currentStep.detail || currentStep.userExperience || 'Inspect this protocol message exchange on the canvas.'}
+                </div>
+                {currentStep.whyItMatters && (
+                  <div style={{ marginTop: '6px', fontSize: '11px', color: 'var(--accent-secondary)', opacity: 0.9 }}>
+                    <strong>Why:</strong> {currentStep.whyItMatters}
+                  </div>
+                )}
+              </aside>
+            )}
+
+            {/* Simulation Playback HUD Pill */}
+            {isPlaying && (
+              <div className="simulation-hud-pill" role="status" aria-live="polite">
+                <div className="sim-pulse-dot" />
+                <div className="sim-content">
+                  <span className="sim-title">
+                    Simulating <strong>Step {currentStepIndex + 1}/{activeSteps.length}</strong>
+                  </span>
+                  <span className="sim-step-name">{currentStep?.label}</span>
+                </div>
+                <div className="sim-shortcuts-hints">
+                  <span className="sim-shortcut-badge"><kbd>Space</kbd> Pause</span>
+                  <span className="sim-shortcut-badge"><kbd>R</kbd> Reset</span>
+                  <span className="sim-shortcut-badge"><kbd>→</kbd> Step</span>
+                  <span className="sim-shortcut-badge"><kbd>?</kbd> Help</span>
+                </div>
+              </div>
+            )}
+
             {/*
               A11y fallback: when uiStore.showListView is true, hide the
               canvas and present a screen-reader-friendly linear list of
@@ -1645,6 +2296,16 @@ function AppContent() {
                     );
                   })}
                 </ol>
+                <button
+                  type="button"
+                  className="list-view-show-all-btn"
+                  onClick={showAllGroups}
+                  disabled={hiddenGroups.length === 0}
+                  aria-label="Show all phases"
+                >
+                  <Eye size={12} aria-hidden="true" />
+                  <span>Show all phases</span>
+                </button>
               </div>
             ) : null}
 
@@ -1703,66 +2364,70 @@ function AppContent() {
               and details-panel content stay in sync.
             */}
             {!showListView && visualizationMode === 'sequence' && (
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              edgeTypes={edgeTypes}
-              onNodeClick={onNodeClick}
-              onEdgeClick={onEdgeClick}
-              defaultViewport={{ x: 0, y: 0, zoom: 0.78 }}
-              minZoom={0.2}
-              maxZoom={2.5}
-              onInit={(instance) => {
-                const centerY = 140 + currentStepIndex * 90;
-                setTimeout(() => {
-                  instance.setCenter(800, centerY + 20, { zoom: 0.78, duration: 0 });
-                }, 60);
-              }}
-              nodesDraggable={false}
-              nodesConnectable={false}
-              elementsSelectable={true}
-              zoomOnScroll={true}
-              zoomOnPinch={true}
-              zoomOnDoubleClick={true}
-              panOnDrag={true}
-              preventScrolling={true}
-              onlyRenderVisibleElements={true}
-              role="graphics-document"
-              aria-label="EMV 3DS sequence diagram"
-              aria-roledescription="Sequence diagram"
-            >
-              {/* The dot grid is now 32px (sparse) so it does not conflict
-                  with the 14px phase-band dot pattern. See CSS rule in
-                  App.css for the .react-flow__background-pattern.dots
-                  override. */}
-              <Background
-                color={theme === 'dark' ? '#1a1a1f' : '#cbd5e1'}
-                bgColor="transparent"
-                gap={32}
-                size={1}
-                variant={BackgroundVariant.Dots}
-              />
-              <ReactFlowControls position="bottom-right" />
-              {/*
-                The MiniMap is now collapsible (120×80px when collapsed)
-                and positioned bottom-left under the legend, so the four
-                bottom corners each host exactly one floating control:
-                  bottom-left:  MiniMap (collapsible)
-                  bottom-right: ReactFlow zoom controls
-                  top-left:     scenario toolbar toggle
-                  top-right:    panel toggle buttons
-              */}
-              <MiniMap
-                nodeColor={() => (theme === 'dark' ? '#27272a' : '#cbd5e1')}
-                zoomable
-                pannable
-                position="bottom-left"
-                style={{ width: 120, height: 80 }}
-                maskColor={theme === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)'}
-                aria-label="Diagram minimap"
-              />
-            </ReactFlow>
+            <div className="sequence-canvas-stage">
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                onNodeClick={onNodeClick}
+                onEdgeClick={onEdgeClick}
+                defaultViewport={{ x: 0, y: 0, zoom: 0.78 }}
+                minZoom={0.2}
+                maxZoom={2.5}
+                onInit={(instance) => {
+                  const isHoriz = canvasOrientation === 'horizontal';
+                  const centerX = isHoriz ? STEP_X_BASE_HORIZONTAL + currentStepIndex * STEP_X_GAP_HORIZONTAL : 800;
+                  const centerY = isHoriz ? 435 : 140 + currentStepIndex * 90;
+                  setTimeout(() => {
+                    instance.setCenter(centerX, centerY, { zoom: 0.78, duration: 0 });
+                  }, 60);
+                }}
+                nodesDraggable={false}
+                nodesConnectable={false}
+                elementsSelectable={true}
+                zoomOnScroll={true}
+                zoomOnPinch={true}
+                zoomOnDoubleClick={true}
+                panOnDrag={true}
+                preventScrolling={true}
+                onlyRenderVisibleElements={true}
+                role="graphics-document"
+                aria-label="EMV 3DS sequence diagram"
+                aria-roledescription="Sequence diagram"
+              >
+                {/* The dot grid is now 32px (sparse) so it does not conflict
+                    with the 14px phase-band dot pattern. See CSS rule in
+                    App.css for the .react-flow__background-pattern.dots
+                    override. */}
+                <Background
+                  color={theme === 'dark' ? '#1a1a1f' : '#cbd5e1'}
+                  bgColor="transparent"
+                  gap={32}
+                  size={1}
+                  variant={BackgroundVariant.Dots}
+                />
+                <ReactFlowControls position="bottom-right" />
+                {/*
+                  The MiniMap is now collapsible (120×80px when collapsed)
+                  and positioned bottom-left under the legend, so the four
+                  bottom corners each host exactly one floating control:
+                    bottom-left:  MiniMap (collapsible)
+                    bottom-right: React Flow zoom controls
+                    top-left:     scenario toolbar toggle
+                    top-right:    panel toggle buttons
+                */}
+                <MiniMap
+                  nodeColor={() => (theme === 'dark' ? '#27272a' : '#cbd5e1')}
+                  zoomable
+                  pannable
+                  position="bottom-left"
+                  style={{ width: 120, height: 80 }}
+                  maskColor={theme === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)'}
+                  aria-label="Diagram minimap"
+                />
+              </ReactFlow>
+            </div>
             )}
 
             {!showListView && visualizationMode === 'branch' && (
@@ -1812,6 +2477,9 @@ function AppContent() {
 
       {/* Guided Tour for new and returning users */}
       <TourGuide isOpen={isTourOpen} onClose={handleCloseTour} />
+
+      {/* Keyboard Shortcuts Reference Modal */}
+      <KeyboardShortcutsModal isOpen={isShortcutsOpen} onClose={() => uiActions.setShortcutsOpen(false)} />
 
       {/* === Sandbox isolation footer (audit §4.3 / axis 6) ===
            One-line credibility cue for security engineers: this tool

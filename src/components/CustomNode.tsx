@@ -32,7 +32,104 @@ const getParticipantIcon = (id: string, color: string) => {
   }
 };
 
-export const ParticipantHeaderNode: React.FC<{ data: { name: string; fullName: string; id: string; color: string; stroke: string; bg: string; isActive?: boolean } }> = React.memo(({ data }) => {
+export const ParticipantHeaderNode: React.FC<{
+  data: {
+    name: string;
+    fullName: string;
+    id: string;
+    color: string;
+    stroke: string;
+    bg: string;
+    isActive?: boolean;
+    orientation?: 'vertical' | 'horizontal';
+  };
+}> = React.memo(({ data }) => {
+  const isHorizontal = data.orientation === 'horizontal';
+
+  if (isHorizontal) {
+    return (
+      <div
+        className={`participant-header-node ${data.isActive ? 'is-active' : ''}`}
+        data-clickable
+        data-testid={`participant-${data.id}`}
+        data-active={data.isActive ? 'true' : 'false'}
+        data-layer="rail"
+        data-participant={data.id}
+        role="button"
+        tabIndex={0}
+        aria-label={`${data.name} (${data.fullName})${data.isActive ? ' — active in current step' : ''}`}
+        title={`Click to view ${data.fullName} profile`}
+        style={{
+          border: `1.5px solid ${data.isActive ? data.stroke : 'var(--border-color)'}`,
+          borderLeft: `4px solid ${data.stroke}`,
+          boxShadow: data.isActive
+            ? `0 0 20px ${data.stroke}66, 0 8px 24px rgba(0, 0, 0, 0.4)`
+            : '0 4px 16px rgba(0, 0, 0, 0.25)',
+          borderRadius: '10px',
+          padding: '8px 12px',
+          background: data.isActive ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
+          color: 'var(--text-primary)',
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: '10px',
+          width: '180px',
+          height: '64px',
+          boxSizing: 'border-box',
+          transition: 'all 0.25s ease',
+          cursor: 'pointer',
+        }}
+      >
+        <div
+          style={{
+            background: `${data.stroke}18`,
+            padding: '7px',
+            borderRadius: '8px',
+            border: `1px solid ${data.stroke}35`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          {getParticipantIcon(data.id, data.stroke)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+          <div style={{ fontWeight: '800', fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {data.name}
+          </div>
+          <div style={{
+            fontSize: '9.5px',
+            color: 'var(--text-muted)',
+            marginTop: '2px',
+            fontWeight: '600',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {data.fullName}
+          </div>
+        </div>
+        <div style={{
+          fontSize: '9px',
+          fontWeight: '800',
+          color: data.stroke,
+          background: `${data.stroke}14`,
+          padding: '2px 5px',
+          borderRadius: '4px',
+          letterSpacing: '0.04em',
+          border: `1px solid ${data.stroke}30`,
+          flexShrink: 0,
+        }}>
+          {data.id}
+        </div>
+
+        {/* Handle for horizontal lifeline extending to the right */}
+        <Handle type="source" position={Position.Right} id="lifeline-start-right" style={{ opacity: 0 }} />
+      </div>
+    );
+  }
+
   return (
     <div
       className={`participant-header-node ${data.isActive ? 'is-active' : ''}`}
@@ -119,17 +216,26 @@ export const LifelineAnchorNode: React.FC<{
     isActive: boolean; 
     isHighlighted: boolean; 
     color: string;
+    stepGroupId?: import('../types').StepGroupId;
+    isCurrentGroup?: boolean;
+    focusPhase?: boolean;
+    orientation?: 'vertical' | 'horizontal';
   } 
 }> = React.memo(({ data }) => {
+  const isDimmed = data.focusPhase && !data.isCurrentGroup;
+  const isHorizontal = data.orientation === 'horizontal';
+
   return (
     <div
       className={`lifeline-anchor-node ${data.isHighlighted ? 'highlighted' : ''}`}
       data-layer="rail"
       data-anchor="message"
       data-highlighted={data.isHighlighted || undefined}
+      data-step-group={data.stepGroupId ?? undefined}
+      data-step-group-current={data.stepGroupId ? (data.isCurrentGroup ? 'true' : 'false') : undefined}
       style={{
-        width: '10px',
-        height: '36px',
+        width: isHorizontal ? '36px' : '10px',
+        height: isHorizontal ? '10px' : '36px',
         borderRadius: '4px',
         background: data.isHighlighted ? data.color : data.isActive ? 'rgba(99, 102, 241, 0.8)' : 'var(--border-color)',
         border: `1.5px solid ${data.isHighlighted ? '#ffffff' : data.isActive ? 'rgba(99, 102, 241, 0.3)' : 'var(--border-color)'}`,
@@ -138,49 +244,91 @@ export const LifelineAnchorNode: React.FC<{
         alignItems: 'center',
         justifyContent: 'center',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        opacity: data.isActive ? 1 : 0.25,
+        opacity: isDimmed ? 0.1 : (data.isActive ? 1 : 0.25),
       }}
     >
-      {/* Handles for incoming/outgoing horizontal connections.
-          Sized 8x8 (not 1x1) so screen readers and snap targets can
-          hit-test the geometry, but kept visually transparent because
-          the diagram is read-only — see Pillar 2 #1 of the audit. */}
+      {/* Handles for both vertical and horizontal connections - both source and target for all 4 directions */}
       <Handle
         type="target"
         position={Position.Left}
         id="left"
         style={{ background: 'transparent', border: 'none', width: '8px', height: '8px', opacity: 0.01 }}
-        aria-label="Incoming connection target"
+        aria-label="Incoming connection target left"
+      />
+      <Handle
+        type="source"
+        position={Position.Left}
+        id="left"
+        style={{ background: 'transparent', border: 'none', width: '8px', height: '8px', opacity: 0.01 }}
+        aria-label="Outgoing connection source left"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="right"
         style={{ background: 'transparent', border: 'none', width: '8px', height: '8px', opacity: 0.01 }}
-        aria-label="Outgoing connection source"
+        aria-label="Outgoing connection source right"
+      />
+      <Handle
+        type="target"
+        position={Position.Right}
+        id="right"
+        style={{ background: 'transparent', border: 'none', width: '8px', height: '8px', opacity: 0.01 }}
+        aria-label="Incoming connection target right"
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="top"
+        style={{ background: 'transparent', border: 'none', width: '8px', height: '8px', opacity: 0.01 }}
+        aria-label="Incoming connection target top"
+      />
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="top"
+        style={{ background: 'transparent', border: 'none', width: '8px', height: '8px', opacity: 0.01 }}
+        aria-label="Outgoing connection source top"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="bottom"
+        style={{ background: 'transparent', border: 'none', width: '8px', height: '8px', opacity: 0.01 }}
+        aria-label="Outgoing connection source bottom"
+      />
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        id="bottom"
+        style={{ background: 'transparent', border: 'none', width: '8px', height: '8px', opacity: 0.01 }}
+        aria-label="Incoming connection target bottom"
       />
     </div>
   );
 });
 
 /**
- * LifelineBottomNode draws a small cap at the foot of an actor's vertical
- * rail. It gives the rail a visible terminus (a thin pill that matches the
- * participant's stroke color) and highlights when the actor is involved
- * in the current step. The rail itself is drawn as a React Flow edge from
- * the participant header to this node.
+ * LifelineBottomNode draws a small cap at the foot of an actor's lifeline.
+ * In vertical mode, it sits at the bottom of the column.
+ * In horizontal mode, it sits at the right end of the row.
  */
 export const LifelineBottomNode: React.FC<{
-  data: { color: string; isActive: boolean };
+  data: {
+    color: string;
+    isActive: boolean;
+    orientation?: 'vertical' | 'horizontal';
+  };
 }> = React.memo(({ data }) => {
+  const isHorizontal = data.orientation === 'horizontal';
   return (
     <div
       className={`lifeline-bottom-cap ${data.isActive ? 'is-active' : ''}`}
       data-layer="rail"
       data-anchor="lifeline-bottom"
       style={{
-        width: '28px',
-        height: '10px',
+        width: isHorizontal ? '10px' : '28px',
+        height: isHorizontal ? '28px' : '10px',
         borderRadius: '6px',
         background: data.isActive ? data.color : 'transparent',
         border: `1.5px solid ${data.color}`,
@@ -189,7 +337,13 @@ export const LifelineBottomNode: React.FC<{
         transition: 'background 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease',
         pointerEvents: 'none',
       }}
-    />
+    >
+      {isHorizontal ? (
+        <Handle type="target" position={Position.Left} id="lifeline-end-left" style={{ opacity: 0 }} />
+      ) : (
+        <Handle type="target" position={Position.Top} id="lifeline-end" style={{ opacity: 0 }} />
+      )}
+    </div>
   );
 });
 
@@ -202,6 +356,11 @@ export const InternalStepNode: React.FC<{
     color: string;
     stroke: string;
     isError?: boolean;
+    stepGroupId?: import('../types').StepGroupId;
+    isCurrentGroup?: boolean;
+    focusPhase?: boolean;
+    orientation?: 'vertical' | 'horizontal';
+    placement?: 'left' | 'right';
     /**
      * Optional archetype tag surfaced via `data-archetype` on the DOM.
      * Defaults to 'internal' for backward compatibility. Used by the
@@ -224,15 +383,15 @@ export const InternalStepNode: React.FC<{
     return <RotateCw size={13} style={{ color: data.isActive ? data.stroke : 'var(--text-muted)' }} aria-hidden="true" />;
   };
 
-  // Non-color state: error steps use a dashed border (not just a red hue)
-  // so users with red/green color blindness can still distinguish them.
-  // Width also bumps from 1.5px → 2.25px when highlighted (a second
-  // non-color cue on top of the color change).
   const isHighlighted = data.isHighlighted;
   const isError = !!data.isError;
+  const isHorizontal = data.orientation === 'horizontal';
+  const placement = data.placement ?? 'right';
   const borderStyle = isError
     ? `1.5px dashed ${data.stroke}`
     : `${isHighlighted ? 2 : 1}px solid ${isHighlighted ? data.stroke : data.isActive ? 'var(--border-active)' : 'var(--border-color)'}`;
+
+  const isDimmed = data.focusPhase && !data.isCurrentGroup;
 
   return (
     <div
@@ -241,31 +400,69 @@ export const InternalStepNode: React.FC<{
       data-step-state={isError ? 'error' : isHighlighted ? 'current' : data.isActive ? 'active' : 'inactive'}
       data-layer="step"
       data-archetype={data.archetype ?? 'internal'}
+      data-step-group={data.stepGroupId ?? undefined}
+      data-step-group-current={data.stepGroupId ? (data.isCurrentGroup ? 'true' : 'false') : undefined}
       role="button"
       tabIndex={isHighlighted ? 0 : -1}
       aria-current={isHighlighted ? 'step' : undefined}
       aria-invalid={isError || undefined}
       aria-label={`Step ${data.num}: ${data.label}${isError ? ' (error path)' : ''}`}
       style={{
-        padding: '10px 14px',
+        padding: '8px 12px',
         borderRadius: '8px',
         background: isHighlighted ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
         border: borderStyle,
-        borderLeft: `4px solid ${data.stroke}`,
+        borderLeft: placement === 'left' ? borderStyle : `4px solid ${data.stroke}`,
+        borderRight: placement === 'left' ? `4px solid ${data.stroke}` : borderStyle,
         boxShadow: isHighlighted
           ? `0 0 20px ${data.stroke}44, 0 8px 24px rgba(0, 0, 0, 0.4)`
           : '0 2px 8px rgba(0, 0, 0, 0.2)',
         color: data.isActive ? 'var(--text-primary)' : 'var(--text-muted)',
         fontSize: '11.5px',
-        width: '210px',
+        width: '200px',
+        boxSizing: 'border-box',
         display: 'flex',
+        position: 'relative',
         alignItems: 'center',
-        gap: '10px',
+        gap: '8px',
         transition: 'all 0.25s ease',
-        opacity: data.isActive ? 1 : 0.65,
+        opacity: isDimmed ? 0.12 : (data.isActive ? 1 : 0.65),
         cursor: 'pointer',
+        zIndex: isHighlighted ? 12 : 6,
       }}
     >
+      {/* Connector arm linking the internal step card cleanly to its lifeline activation anchor */}
+      {!isHorizontal && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            [placement === 'left' ? 'right' : 'left']: '-25px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: '25px',
+            height: '0px',
+            borderTop: `1.5px dashed ${data.isActive ? data.stroke : 'var(--border-color)'}`,
+            opacity: isDimmed ? 0.2 : (data.isActive ? 0.8 : 0.4),
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+      {isHorizontal && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: '-18px',
+            left: '30px',
+            width: '0px',
+            height: '18px',
+            borderLeft: `1.5px dashed ${data.isActive ? data.stroke : 'var(--border-color)'}`,
+            opacity: isDimmed ? 0.2 : (data.isActive ? 0.8 : 0.4),
+            pointerEvents: 'none',
+          }}
+        />
+      )}
       <div
         style={{
           background: `${data.stroke}18`,
@@ -287,13 +484,15 @@ export const InternalStepNode: React.FC<{
           gap: '6px',
         }}>
           <span style={{
-            fontWeight: '800',
-            color: data.stroke,
             fontSize: '9.5px',
-            background: `${data.stroke}15`,
+            fontWeight: '700',
+            letterSpacing: '0.04em',
+            color: isError ? 'var(--accent-danger)' : data.stroke,
+            background: isError ? 'rgba(239, 68, 68, 0.12)' : `${data.stroke}18`,
             padding: '1px 5px',
             borderRadius: '4px',
-            letterSpacing: '0.04em'
+            border: `1px solid ${isError ? 'rgba(239, 68, 68, 0.3)' : `${data.stroke}30`}`,
+            textTransform: 'uppercase'
           }}>
             STEP {data.num}
           </span>
@@ -309,7 +508,7 @@ export const InternalStepNode: React.FC<{
             </span>
           )}
         </div>
-        <div style={{
+        <div className="step-label-text" style={{
           fontWeight: '600',
           color: data.isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
           overflow: 'hidden',
@@ -405,10 +604,13 @@ export const StepGroupBandNode: React.FC<{
     width: number;
     height: number;
     isCurrent: boolean;
+    groupId?: import('../types').StepGroupId;
     /** 1-based phase index (rendered on the right edge as a chip). */
     phaseIndex: number;
     /** Number of steps in this phase (for the chip footer). */
     stepCount: number;
+    focusPhase?: boolean;
+    orientation?: 'vertical' | 'horizontal';
     /**
      * If set, the badge is rendered on the band's title row showing the
      * earliest protocol version that this phase applies to. Phases with
@@ -433,26 +635,34 @@ export const StepGroupBandNode: React.FC<{
     : data.introducedIn === data.activeVersion
     ? 'same'
     : 'newer';
+
+  const isHorizontal = data.orientation === 'horizontal';
+  const isDimmed = data.focusPhase && !data.isCurrent;
+
   return (
     <div
       className={`step-group-band ${data.isCurrent ? 'is-current' : ''}`}
       data-layer="background"
       data-domain="phase-band"
+      data-step-group={data.groupId ?? undefined}
+      data-step-group-current={data.isCurrent ? 'true' : 'false'}
       data-current={data.isCurrent || undefined}
       style={{
         width: `${data.width}px`,
         height: `${data.height}px`,
-        background: `linear-gradient(90deg, ${data.color}${data.isCurrent ? '10' : '04'} 0%, ${data.color}${data.isCurrent ? '18' : '08'} 50%, ${data.color}${data.isCurrent ? '10' : '04'} 100%)`,
-        borderLeft: `3px solid ${data.color}`,
-        borderRight: `3px solid ${data.color}`,
-        borderTop: `1px solid ${data.color}${data.isCurrent ? '50' : '20'}`,
-        borderBottom: `1px solid ${data.color}${data.isCurrent ? '50' : '20'}`,
+        background: isHorizontal
+          ? `linear-gradient(180deg, ${data.color}${data.isCurrent ? '16' : '05'} 0%, ${data.color}${data.isCurrent ? '22' : '09'} 50%, ${data.color}${data.isCurrent ? '16' : '05'} 100%)`
+          : `linear-gradient(90deg, ${data.color}${data.isCurrent ? '10' : '04'} 0%, ${data.color}${data.isCurrent ? '18' : '08'} 50%, ${data.color}${data.isCurrent ? '10' : '04'} 100%)`,
+        borderLeft: isHorizontal ? `1px solid ${data.color}${data.isCurrent ? '50' : '20'}` : `3px solid ${data.color}`,
+        borderRight: isHorizontal ? `1px solid ${data.color}${data.isCurrent ? '50' : '20'}` : `3px solid ${data.color}`,
+        borderTop: isHorizontal ? `3px solid ${data.color}` : `1px solid ${data.color}${data.isCurrent ? '50' : '20'}`,
+        borderBottom: isHorizontal ? `3px solid ${data.color}` : `1px solid ${data.color}${data.isCurrent ? '50' : '20'}`,
         borderRadius: '8px',
         pointerEvents: 'none',
         position: 'relative',
-        opacity: data.isCurrent ? 1 : 0.45,
+        opacity: isDimmed ? 0.08 : (data.isCurrent ? 1 : 0.45),
         boxShadow: data.isCurrent
-          ? `0 0 16px -4px ${data.color}40`
+          ? (data.focusPhase ? `0 0 24px ${data.color}55, inset 0 0 12px ${data.color}20` : `0 0 16px -4px ${data.color}40`)
           : 'none',
         transition: 'opacity 0.3s ease, box-shadow 0.3s ease',
       }}
@@ -496,7 +706,7 @@ export const StepGroupBandNode: React.FC<{
         >
           P{data.phaseIndex.toString().padStart(2, '0')}
         </span>
-        {data.title}
+        <span className="phase-band-title">{data.title}</span>
         {data.introducedIn && (
           <span
             title={`Introduced in EMV 3DS v${data.introducedIn}`}
@@ -623,6 +833,10 @@ export const StepNumberRailNode: React.FC<{
     isActive: boolean;
     isCurrent: boolean;
     color: string;
+    stepGroupId?: import('../types').StepGroupId;
+    isCurrentGroup?: boolean;
+    focusPhase?: boolean;
+    orientation?: 'vertical' | 'horizontal';
   };
 }> = React.memo(({ data }) => {
   const ring = data.isCurrent
@@ -630,6 +844,10 @@ export const StepNumberRailNode: React.FC<{
     : data.isActive
       ? `0 0 0 1px ${data.color}40`
       : 'none';
+
+  const isHorizontal = data.orientation === 'horizontal';
+  const isDimmed = data.focusPhase && !data.isCurrentGroup;
+
   return (
     <div
       className={`step-number-rail ${data.isCurrent ? 'is-current' : ''} ${
@@ -638,6 +856,8 @@ export const StepNumberRailNode: React.FC<{
       data-testid={`rail-${data.num}`}
       data-step-state={data.isCurrent ? 'current' : data.isActive ? 'active' : 'inactive'}
       data-layer="rail"
+      data-step-group={data.stepGroupId ?? undefined}
+      data-step-group-current={data.stepGroupId ? (data.isCurrentGroup ? 'true' : 'false') : undefined}
       role={data.isCurrent ? 'button' : undefined}
       tabIndex={data.isCurrent ? 0 : -1}
       aria-current={data.isCurrent ? 'step' : undefined}
@@ -645,7 +865,7 @@ export const StepNumberRailNode: React.FC<{
       style={{
         display: 'inline-flex',
         flexDirection: 'column',
-        alignItems: 'flex-end',
+        alignItems: isHorizontal ? 'center' : 'flex-end',
         gap: '1px',
         padding: '3px 6px 3px 4px',
         borderRadius: '6px',
@@ -658,13 +878,15 @@ export const StepNumberRailNode: React.FC<{
           ? `1px solid ${data.color}80`
           : '1px solid transparent',
         boxShadow: ring,
+        position: 'relative',
         pointerEvents: 'none',
         transition: 'all 0.2s ease',
-        opacity: data.isActive ? 1 : 0.4,
-        minWidth: '76px',
+        opacity: isDimmed ? 0.1 : (data.isActive ? 1 : 0.4),
+        minWidth: isHorizontal ? '68px' : '76px',
       }}
     >
       <div
+        className="node-step-num"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -691,15 +913,16 @@ export const StepNumberRailNode: React.FC<{
         {data.num}
       </div>
       <div
+        className="step-label-text"
         style={{
           fontSize: '8.5px',
           fontWeight: 600,
           color: data.isCurrent ? 'var(--text-primary)' : 'var(--text-muted)',
-          maxWidth: '72px',
+          maxWidth: isHorizontal ? '66px' : '72px',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          textAlign: 'right',
+          textAlign: isHorizontal ? 'center' : 'right',
           lineHeight: 1.1,
         }}
         title={data.label}

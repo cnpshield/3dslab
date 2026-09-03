@@ -87,6 +87,13 @@ export const typeDefs = `#graphql
     url: String!
     createdAt: String!
     scenario: ScenarioConfig!
+    currentStepIndex: Int
+    theme: ThemeMode
+    securityLensEnabled: Boolean
+    hiddenGroups: [String!]
+    canvasOrientation: String
+    readingMode: Boolean
+    focusPhase: Boolean
   }
 
   input SaveStateInput {
@@ -94,6 +101,10 @@ export const typeDefs = `#graphql
     currentStepIndex: Int
     theme: ThemeMode
     securityLensEnabled: Boolean
+    hiddenGroups: [String!]
+    canvasOrientation: String
+    readingMode: Boolean
+    focusPhase: Boolean
   }
 
   input ScenarioInput {

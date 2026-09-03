@@ -630,6 +630,12 @@
 .canvas-flow-shell {
   position: absolute;
   inset: 0 0 0 0;
+  overflow: hidden;
+}
+
+.sequence-canvas-stage {
+  position: absolute;
+  inset: 0;
 }
 
 /* React Flow v12 ships with --xy-background-color-default: #141414 in
@@ -670,7 +676,7 @@
   user-select: none;
 }
 
-/* Unified Canvas Top Header Bar (Phases on Left, Participants in Center, Menu on Right) */
+/* Unified Canvas Top Header Bar (Phases on Left, Responsive Participants in Center, Controls on Right) */
 .canvas-header-bar {
   position: absolute;
   top: 12px;
@@ -680,7 +686,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   pointer-events: none;
 }
 
@@ -696,11 +702,90 @@
   display: flex;
   justify-content: center;
   pointer-events: auto;
+  overflow: hidden;
 }
 
 .canvas-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
   pointer-events: auto;
+}
+
+/* Unified Canvas Mode Segmented Toolbar (Read, Focus, Orientation) */
+.canvas-mode-group {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 2px 3px;
+  gap: 2px;
+  box-shadow: var(--shadow-sm);
+}
+
+.canvas-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.canvas-mode-btn:hover {
+  color: var(--text-primary);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.canvas-mode-btn.is-active {
+  color: var(--accent-primary);
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.14);
+}
+
+.canvas-orientation-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.canvas-orientation-pill:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+  background: rgba(37, 99, 235, 0.1);
+  transform: translateY(-1px);
+}
+
+.canvas-orientation-pill.is-active {
+  color: var(--accent-primary);
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.12);
 }
 
 /* Persistent Participant Lane Bar across top of sequence canvas */
@@ -1115,11 +1200,11 @@
    error, checkmark on success, so deuteranopia / protanopia users get
    a second signal in addition to color.
    ======================================================================== */
-.react-flow__node[data-step-state="current"] {
+.react-flow__node [data-step-state="current"] {
   /* Boost the inner box-shadow on the active node — second non-color cue */
   filter: drop-shadow(0 0 4px currentColor);
 }
-.react-flow__node[data-step-state="current"]::after {
+.react-flow__node [data-step-state="current"]::after {
   content: "●";
   position: absolute;
   top: -8px;
@@ -1136,12 +1221,12 @@
   box-shadow: 0 0 0 2px var(--bg-primary);
   pointer-events: none;
 }
-.react-flow__node[data-step-state="error"] {
+.react-flow__node [data-step-state="error"] {
   /* Dashed outline on error nodes, even when the inner border is solid */
   outline: 2px dashed var(--color-danger, #ef4444);
   outline-offset: 2px;
 }
-.react-flow__node[data-step-state="executed"]::before {
+.react-flow__node [data-step-state="active"]::before {
   content: "✓";
   position: absolute;
   top: -6px;
@@ -1783,4 +1868,383 @@
   background: #ffffff !important;
   border: 1px solid rgba(37, 99, 235, 0.25) !important;
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(37, 99, 235, 0.08) !important;
+}
+
+/* ========================================================================
+   Reading Mode — calmer presentation for long protocol walks.
+   Research-backed (NNGroup cognitive-load, Camunda BPMN readability,
+   PMC focus+context review): less glow, reduced saturation,
+   stronger text contrast, damped pulses, softer inactive edges.
+   ======================================================================== */
+.canvas-flow-shell.is-reading-mode {
+  --reading-dim: 0.55;
+}
+
+.canvas-flow-shell.is-reading-mode .react-flow__background-pattern.dots {
+  opacity: 0.25;
+}
+
+.canvas-flow-shell.is-reading-mode .step-group-band {
+  filter: saturate(0.7) brightness(1.02);
+}
+
+.canvas-flow-shell.is-reading-mode .react-flow__node [data-step-state="current"] {
+  filter: none;
+}
+
+.canvas-flow-shell.is-reading-mode .react-flow__node [data-step-state="current"]::after {
+  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-secondary) !important;
+  background: var(--accent-secondary);
+  animation: none !important;
+}
+
+.canvas-flow-shell.is-reading-mode .react-flow__node [data-step-state="active"]::before {
+  box-shadow: 0 0 0 1.5px var(--bg-primary);
+}
+
+.canvas-flow-shell.is-reading-mode .react-flow__edge.selected .react-flow__edge-path,
+.canvas-flow-shell.is-reading-mode .react-flow__edge .react-flow__edge-path[data-selected="true"],
+.canvas-flow-shell.is-reading-mode .react-flow__edge .react-flow__edge-path[data-step-state="current"] {
+  filter: none;
+  stroke-width: 3 !important;
+}
+
+.canvas-flow-shell.is-reading-mode .react-flow__edge .react-flow__edge-path[data-step-state]:not([data-step-state="current"]):not([data-selected="true"]) {
+  opacity: var(--reading-dim);
+  stroke-width: 1.75 !important;
+}
+
+/* Dim nodes whose inner state is neither current nor active. */
+.canvas-flow-shell.is-reading-mode .step-number-rail:not(.is-current):not([data-step-state="active"]),
+.canvas-flow-shell.is-reading-mode .internal-step-node[data-step-state="inactive"] {
+  opacity: var(--reading-dim);
+}
+
+.canvas-flow-shell.is-reading-mode .react-flow__edge-label-box.selected {
+  animation: none !important;
+  transform: scale(1.02);
+}
+
+.canvas-flow-shell.is-reading-mode .participant-bar-pill.is-active {
+  box-shadow: 0 0 0 2px var(--participant-stroke, var(--accent-primary)), var(--shadow-sm);
+}
+
+.canvas-flow-shell.is-reading-mode .data-packet-chip {
+  animation-duration: 2.4s !important;
+  filter: saturate(0.7);
+}
+
+.canvas-flow-shell.is-reading-mode .react-flow__minimap {
+  opacity: 0.6;
+}
+
+.canvas-flow-shell.is-reading-mode .canvas-participant-bar {
+  filter: saturate(0.85);
+}
+
+.canvas-flow-shell.is-reading-mode .timeline-dot.current {
+  box-shadow: 0 0 0 3px var(--accent-secondary-bg-trans);
+}
+
+.canvas-flow-shell.is-reading-mode .scenario-status-card,
+.canvas-flow-shell.is-reading-mode .playback-deck,
+.canvas-flow-shell.is-reading-mode .control-group,
+.canvas-flow-shell.is-reading-mode .timeline-wrapper {
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* ========================================================================
+   Focus Phase Spotlight
+   ======================================================================== */
+.canvas-flow-shell.is-focus-phase .step-group-band:not(.is-current) {
+  opacity: 0.08 !important;
+  filter: saturate(0.3);
+}
+
+.canvas-flow-shell.is-focus-phase .participant-header-node:not(.is-active) {
+  opacity: 0.65;
+}
+
+.canvas-flow-shell.is-focus-phase .canvas-participant-bar .participant-bar-pill:not(.is-active) {
+  opacity: 0.55;
+}
+
+/* Phase Focus HUD banner at top of canvas */
+.phase-focus-hud {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--accent-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(37, 99, 235, 0.25);
+  animation: fadeIn 0.2s ease;
+  pointer-events: auto;
+}
+
+.phase-focus-hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.phase-focus-hud-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.phase-focus-hud-btn:hover {
+  background: rgba(37, 99, 235, 0.15);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+/* ========================================================================
+   Reader Story Deck — Docked reading card at bottom center of canvas
+   ======================================================================== */
+.reader-story-deck {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: min(820px, calc(100% - 40px));
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 16px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  padding: 14px 18px;
+  animation: fadeInUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: auto;
+}
+
+.reader-deck-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.reader-deck-phase-tag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+}
+
+.reader-deck-step-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  color: var(--accent-primary);
+}
+
+.reader-deck-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reader-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.reader-nav-btn:hover {
+  background: rgba(37, 99, 235, 0.15);
+  border-color: var(--accent-primary);
+}
+
+.reader-deck-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.reader-deck-body {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* Vertical Data Packet Travel animation */
+@keyframes dataPacketTravelVertical {
+  0% {
+    transform: translate(14px, -50%) translateY(0);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(14px, -50%) translateY(var(--travel-distance));
+    opacity: 0;
+  }
+}
+
+.data-packet-chip.is-vertical {
+  animation-name: dataPacketTravelVertical !important;
+  transform: translate(14px, -50%);
+}
+
+/* Responsive compression for participant lane pills */
+@media (max-width: 1360px) {
+  .participant-bar-name {
+    display: none;
+  }
+  .participant-bar-pill {
+    padding: 3px 6px;
+  }
+}
+
+/* Accessibility: ensure reading mode actually boosts contrast on text. */
+.canvas-flow-shell.is-reading-mode .step-label-text,
+.canvas-flow-shell.is-reading-mode .node-step-num,
+.canvas-flow-shell.is-reading-mode .swimlane-column-anchor,
+.canvas-flow-shell.is-reading-mode .phase-band-title {
+  font-weight: 650;
+}
+
+.light-theme .canvas-flow-shell.is-reading-mode .step-label-text,
+.light-theme .canvas-flow-shell.is-reading-mode .node-step-num {
+  color: #0f172a;
+}
+
+/* Simulation Playback HUD Pill */
+.simulation-hud-pill {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 16px;
+  background: var(--bg-glass, rgba(15, 23, 42, 0.88));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border-active, rgba(59, 130, 246, 0.35));
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(59, 130, 246, 0.2);
+  color: var(--text-primary);
+  font-size: 12px;
+  pointer-events: auto;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.canvas-flow-shell.is-reading-mode .simulation-hud-pill {
+  bottom: 180px;
+}
+
+.sim-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: simPulse 1.5s infinite cubic-bezier(0.66, 0, 0, 1);
+  flex-shrink: 0;
+}
+
+@keyframes simPulse {
+  to {
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+}
+
+.sim-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sim-title {
+  font-size: 11.5px;
+  color: var(--accent-primary, #3b82f6);
+  font-weight: 600;
+}
+
+.sim-step-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-shortcuts-hints {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  padding-left: 10px;
+}
+
+.sim-shortcut-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+}
+
+.sim-shortcut-badge kbd {
+  font-size: 9.5px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: var(--text-primary);
 }

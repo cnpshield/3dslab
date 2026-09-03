@@ -713,7 +713,7 @@ export const FLOW_STEPS: FlowStep[] = [
     groupId: 'areq',
     source: 'S',
     target: null,
-    specRef: '§5.8.1.2 — Freshness check before AReq [Req 416]',
+    specRef: '§3.3 Step 6 [Req 441] — 3DS Method freshness before AReq; §5.8.1.2 [Req 416]',
     payloadType: 'json',
     payload: {
       priorMethodAgeSeconds: 480,
@@ -824,8 +824,8 @@ export const FLOW_STEPS: FlowStep[] = [
         browserScreenHeight: '1080',
         browserColorDepth: '24',
         browserTZ: '-360',
-        browserJavaEnabled: 'false',
-        browserJavascriptEnabled: 'true'
+        browserJavaEnabled: false,
+        browserJavascriptEnabled: true
       }
     },
     payloadTitle: 'AReq Network Transmission',
@@ -1087,7 +1087,7 @@ export const FLOW_STEPS: FlowStep[] = [
     groupId: 'ares',
     source: 'S',
     target: 'RE',
-    specRef: '§3.3 Step 10 — [Req 115, 116] Y/A result handling',
+    specRef: '§3.3 Step 10 — [Req 115, 116] Y/A result handling; ECI values 05/06 follow Visa convention — values are Payment System-specific',
     payloadType: 'json',
     payload: (s) => ({
       status: s.transStatus === 'Y' ? 'AUTHENTICATED' : 'ATTEMPTS_PROCESSED',
@@ -1172,6 +1172,7 @@ export const FLOW_STEPS: FlowStep[] = [
     payload: {
       status: 'DECOUPLED_AUTHENTICATION',
       transStatus: 'D',
+      acsDecConInd: 'Y', // [Req 325] ACS shall set acsDecConInd = Y for Decoupled Authentication
       cardholderInfoText: 'Approve this transaction in your banking app to continue.',
       acsRenderingType: { acsInterface: '02', acsUiTemplate: '01' },
       messageVersion: '2.3.1'
@@ -1248,7 +1249,7 @@ export const FLOW_STEPS: FlowStep[] = [
     groupId: 'ares',
     source: 'S',
     target: 'RE',
-    specRef: '§3.3 Step 8/10 — transStatus = S (SPC), 2.3.0+; §3.3 Step 10b (SPA continuation)',
+    specRef: '§3.5.1 SPC-based Requirements; §3.3 Step 10 [Req 107] transStatus = S; §3.3 Step 10b (SPA continuation)',
     payloadType: 'json',
     payload: {
       status: 'SECURE_PAYMENT_CONFIRMATION',
@@ -1365,7 +1366,7 @@ export const FLOW_STEPS: FlowStep[] = [
     groupId: 'challenge',
     source: 'RE',
     target: 'BR',
-    specRef: 'App-based challenge start — SDK invocation before the first SDK CReq/CRes exchange',
+    specRef: '§3.1 Step 10 — 3DS Requestor App passes ARes challenge data to 3DS SDK; App-based challenge start',
     payloadType: 'json',
     payload: {
       action: 'START_SDK_CHALLENGE',
@@ -1390,7 +1391,7 @@ export const FLOW_STEPS: FlowStep[] = [
     groupId: 'challenge',
     source: 'BR',
     target: 'ACS',
-    specRef: 'App-based challenge — initial SDK CReq → ACS',
+    specRef: '§3.1 Step 11 [Req 44–46] — 3DS SDK formats and sends initial CReq to ACS',
     payloadType: 'json',
     messageType: 'CReq',
     payloadTitle: 'SDK CReq Message',
@@ -1483,7 +1484,7 @@ export const FLOW_STEPS: FlowStep[] = [
     groupId: 'challenge',
     source: 'ACS',
     target: 'BR',
-    specRef: 'App-based challenge — SDK-rendered UI from ACS CRes / acsRenderingType',
+    specRef: '§3.1 Steps 13–14 [Req 51–55] — ACS CRes drives SDK challenge UI via acsRenderingType',
     payloadType: 'json',
     payload: (s) => ({
       messageType: 'CRes',

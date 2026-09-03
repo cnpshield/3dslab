@@ -5,7 +5,7 @@
 import { PARTICIPANTS, FLOW_STEPS } from '../data/flowData';
 import { SCENARIO_PRESETS, type ScenarioPreset } from '../data/scenarioPresets';
 import { saveStateToStore, getStateFromStore } from './stateStore';
-import type { Scenario } from '../types';
+import type { Scenario, StepGroupId } from '../types';
 
 export const resolvers = {
   Query: {
@@ -41,23 +41,50 @@ export const resolvers = {
         url: `${window.location.origin}/?s=${state.token}`,
         createdAt: state.createdAt,
         scenario: state.scenario,
+        currentStepIndex: state.currentStepIndex,
+        theme: state.theme,
+        securityLensEnabled: state.securityLensEnabled,
+        hiddenGroups: state.hiddenGroups,
+        canvasOrientation: state.canvasOrientation,
+        readingMode: state.readingMode,
+        focusPhase: state.focusPhase,
       };
     },
   },
 
   Mutation: {
-    saveState: (_: unknown, { input }: { input: { scenario: Scenario; currentStepIndex?: number; theme?: 'light' | 'dark'; securityLensEnabled?: boolean } }) => {
+    saveState: (_: unknown, { input }: { input: {
+      scenario: Scenario;
+      currentStepIndex?: number;
+      theme?: 'light' | 'dark';
+      securityLensEnabled?: boolean;
+      hiddenGroups?: string[];
+      canvasOrientation?: string;
+      readingMode?: boolean;
+      focusPhase?: boolean;
+    } }) => {
       const saved = saveStateToStore({
         scenario: input.scenario,
         currentStepIndex: input.currentStepIndex,
         theme: input.theme,
         securityLensEnabled: input.securityLensEnabled,
+        hiddenGroups: input.hiddenGroups as StepGroupId[] | undefined,
+        canvasOrientation: input.canvasOrientation as ('vertical' | 'horizontal' | undefined),
+        readingMode: input.readingMode,
+        focusPhase: input.focusPhase,
       });
       return {
         token: saved.token,
         url: `${window.location.origin}/?s=${saved.token}`,
         createdAt: saved.createdAt,
         scenario: saved.scenario,
+        currentStepIndex: saved.currentStepIndex,
+        theme: saved.theme,
+        securityLensEnabled: saved.securityLensEnabled,
+        hiddenGroups: saved.hiddenGroups,
+        canvasOrientation: saved.canvasOrientation,
+        readingMode: saved.readingMode,
+        focusPhase: saved.focusPhase,
       };
     },
     applyPreset: (_: unknown, { presetId }: { presetId: string }) => {

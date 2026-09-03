@@ -48,7 +48,7 @@ export const EMVCO_DEVICE_FIELDS: EmvcoDeviceField[] = [
     name: 'BrowserJavaScriptEnabled',
     description: 'Boolean indicating whether JavaScript is enabled in the browser.',
     requirement: 'R',
-    researchNote: 'Required for any 3DS Method iframe flow. If false, the entire 3DS Method step is skipped.',
+    researchNote: 'Required for any 3DS Method iframe flow. If false, the entire 3DS Method step is skipped. Wire name: browserJavascriptEnabled (lowercase "s").',
     browserSource: '<script> tag presence (heuristic)',
   },
   {
@@ -101,9 +101,9 @@ export const EMVCO_DEVICE_FIELDS: EmvcoDeviceField[] = [
   },
   {
     name: 'threeDSServerData',
-    description: 'The data blob the 3DS Server echoes back from the PRes to identify the cached fingerprint session.',
+    description: 'Implementation-level concept (not a normative spec field name): opaque data the 3DS Server embeds in the threeDSMethodData POST to correlate the 3DS Method response with the pending transaction. The spec-defined correlation key is threeDSServerTransID.',
     requirement: 'C',
-    researchNote: 'This is the linkage key. If the 3DS Server cannot match it back, the ACS discards the fingerprint.',
+    researchNote: 'Not a Table A.1 wire field — this is the opaque payload embedded in the 3DS Method form POST. The canonical transaction-level linkage is threeDSServerTransID.',
   },
   {
     name: 'threeDSServerTransactionIdentifier',
@@ -112,9 +112,9 @@ export const EMVCO_DEVICE_FIELDS: EmvcoDeviceField[] = [
     researchNote: 'MUST be UUIDv4 per spec. Reuse across transactions is a serious security defect — allows fingerprint replay.',
   },
   {
-    name: 'NotificationURL',
-    description: 'The merchant-side endpoint the ACS POSTs the final CRes to.',
+    name: 'threeDSMethodNotificationURL',
+    description: 'The 3DS Server endpoint the ACS POSTs the 3DS Method completion result to (not to be confused with notificationURL in AReq, which receives the final CRes).',
     requirement: 'R',
-    researchNote: 'Must be HTTPS. Open redirect / SSRF vectors are common research targets here.',
+    researchNote: 'Must be HTTPS. Open redirect / SSRF vectors are common research targets here. See §5.8.1.1 [Req 82] for the 3DS Method Data POST.',
   },
 ];

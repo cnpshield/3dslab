@@ -126,11 +126,6 @@ export const flowActions = {
   setScenario: (scenario: Scenario) => {
     flowStore.setState((s) => rebuild(scenario, s.hiddenGroups, s.currentStepIndex));
   },
-  /**
-   * Mutate a single scenario field while preserving the others. Useful
-   * for individual controls (e.g. the version toggle) that should not
-   * require the caller to spread the entire scenario.
-   */
   patchScenario: (patch: Partial<Scenario>) => {
     flowStore.setState((s) => rebuild({ ...s.scenario, ...patch }, s.hiddenGroups, s.currentStepIndex));
   },
@@ -155,7 +150,24 @@ export const flowActions = {
     flowStore.setState({ currentStepIndex: 0, isPlaying: false });
   },
   togglePlay: () => {
-    flowStore.setState((s) => ({ isPlaying: !s.isPlaying }));
+    flowStore.setState((s) => {
+      const willPlay = !s.isPlaying;
+      if (willPlay && s.currentStepIndex >= s.activeSteps.length - 1) {
+        return { isPlaying: true, currentStepIndex: 0 };
+      }
+      return { isPlaying: willPlay };
+    });
+  },
+  play: () => {
+    flowStore.setState((s) => {
+      if (s.currentStepIndex >= s.activeSteps.length - 1) {
+        return { isPlaying: true, currentStepIndex: 0 };
+      }
+      return { isPlaying: true };
+    });
+  },
+  pause: () => {
+    flowStore.setState({ isPlaying: false });
   },
   setPlaySpeed: (speed: PlaySpeed) => {
     flowStore.setState({ playSpeed: speed });

@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { getStraightPath, EdgeLabelRenderer, useStore as useReactFlowStore } from '@xyflow/react';
 import type { EdgeProps } from '@xyflow/react';
-import { ArrowRight, ArrowLeft } from 'lucide-react';
+import { ArrowRight, ArrowLeft, ArrowDown, ArrowUp } from 'lucide-react';
+import type { StepGroupId } from '../types';
 
 interface CustomEdgeData {
   color: string;
@@ -13,7 +14,12 @@ interface CustomEdgeData {
   /** Pixel offset to apply to the edge label, used to stagger labels
    *  for parallel edges (same source/target pair). */
   yOffset?: number;
+  xOffset?: number;
   stepNum: string;
+  stepGroupId?: StepGroupId;
+  isCurrentGroup?: boolean;
+  focusPhase?: boolean;
+  orientation?: 'vertical' | 'horizontal';
   msgType?: string;
   fieldsPreview?: string[];
 }
@@ -27,13 +33,6 @@ const useZoom = () => useReactFlowStore((s) => s.transform[2]);
  * Custom message edge between two lifelines. Wrapped in React.memo so
  * panning/zooming the viewport (which fires 60+ times/sec) does not
  * re-render the ~90 message edges that are off-screen or unchanged.
- *
- * Data-packet animation: the chip is rendered into EdgeLabelRenderer
- * (screen-space) and animated with `translateX(var(--travel-distance))`.
- * Without zoom-scaling, the chip only travels `travelDistance` *graph*
- * pixels but the user sees the canvas at 0.6x zoom, so the chip appears
- * to "stop short" of the target. We multiply by the current viewport
- * zoom to keep the visual animation in sync with the graph geometry.
  */
 const CustomMessageEdgeInner: React.FC<EdgeProps> = ({
   id,
@@ -58,36 +57,33 @@ const CustomMessageEdgeInner: React.FC<EdgeProps> = ({
   const isError = !!edgeData?.isError;
   const isSelected = !!edgeData?.isSelected;
   const yOffset = edgeData?.yOffset ?? 0;
+  const xOffset = edgeData?.xOffset ?? 0;
   const strokeColor = edgeData?.color || 'var(--accent-primary)';
+  const isDimmed = !!(edgeData?.focusPhase && !edgeData?.isCurrentGroup);
 
   // Combined visual cue: selected > current > error > default.
-  // The audit (Pillar 2 #5) called for a thicker stroke + glow on the
-  // selected edge. We also bump the stroke for `current` because the
-  // current step is the "follow-the-bouncing-ball" focal point.
   const edgeStrokeWidth = isSelected ? 3.5 : isCurrent ? 2.5 : 1.5;
-  const edgeFilter = isSelected
+  const edgeFilter = isDimmed
+    ? undefined
+    : isSelected
     ? `drop-shadow(0 0 8px ${strokeColor})`
     : isCurrent
       ? `drop-shadow(0 0 6px ${strokeColor}66)`
       : undefined;
 
-  // True when the target sits to the right of the source. Encodes the
-  // direction at the type level so we can pick the right arrow glyph
-  // even when the user has rotated the canvas.
-  const flowsRight = targetX >= sourceX;
-  const DirectionIcon = flowsRight ? ArrowRight : ArrowLeft;
+  // Detect whether edge is mostly vertical or horizontal
+  const isVerticalEdge = Math.abs(targetY - sourceY) > Math.abs(targetX - sourceX);
+  const flowsForward = isVerticalEdge ? targetY >= sourceY : targetX >= sourceX;
+  const DirectionIcon = isVerticalEdge
+    ? (flowsForward ? ArrowDown : ArrowUp)
+    : (flowsForward ? ArrowRight : ArrowLeft);
 
-  // Graph-space travel distance. Negative when the target is to the
-  // left of the source. We scale by `zoom` below so the visible animation
-  // lands on the actual on-screen target position.
-  const travelDistance = targetX - sourceX;
+  // Travel distance along the primary axis of message flow
+  const travelDistance = isVerticalEdge ? targetY - sourceY : targetX - sourceX;
   const travelDuration = useMemo(
     () => Math.min(2.6, Math.max(1.4, Math.abs(travelDistance) / 280)),
     [travelDistance]
   );
-  // Zoom-scaled travel: this is the pixel offset the EdgeLabelRenderer
-  // div needs to translate by for the chip to land on the rendered
-  // target at the current viewport zoom level.
   const scaledTravelPx = travelDistance * zoom;
 
   const packetLabel =
@@ -104,11 +100,14 @@ const CustomMessageEdgeInner: React.FC<EdgeProps> = ({
           ...style,
           stroke: strokeColor,
           strokeWidth: edgeStrokeWidth,
+          opacity: isDimmed ? 0.1 : (isCurrent ? 1 : isSelected ? 0.95 : 0.75),
           filter: edgeFilter,
           transition: 'stroke 0.3s, stroke-width 0.3s, opacity 0.3s, filter 0.3s',
         }}
         markerEnd={markerEnd}
         data-step-state={isCurrent ? 'current' : isError ? 'error' : isSelected ? 'selected' : 'default'}
+        data-step-group={edgeData?.stepGroupId}
+        data-step-group-current={edgeData?.stepGroupId ? (edgeData?.isCurrentGroup ? 'true' : 'false') : undefined}
         data-selected={isSelected || undefined}
         aria-current={isSelected ? 'true' : undefined}
         data-testid={`edge-${id}`}
@@ -130,7 +129,7 @@ const CustomMessageEdgeInner: React.FC<EdgeProps> = ({
             aria-hidden="true"
           >
             <div
-              className="data-packet-chip"
+              className={`data-packet-chip ${isVerticalEdge ? 'is-vertical' : ''}`}
               style={{
                 '--travel-distance': `${scaledTravelPx}px`,
                 '--travel-duration': `${travelDuration}s`,
@@ -152,11 +151,10 @@ const CustomMessageEdgeInner: React.FC<EdgeProps> = ({
         <EdgeLabelRenderer>
           <div
             style={{
-              // Edge-label staggering: yOffset shifts the label down
-              // for parallel edges (same source/target pair) so they
-              // don't overlap. yOffset is computed in App.tsx.
+              // Edge-label staggering: yOffset / xOffset shifts the label
+              // for parallel edges (same source/target pair) so they don't overlap.
               position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY + yOffset}px)`,
+              transform: `translate(-50%, -50%) translate(${labelX + xOffset}px,${labelY + yOffset}px)`,
               pointerEvents: 'all',
               zIndex: 1000,
             }}
@@ -165,6 +163,8 @@ const CustomMessageEdgeInner: React.FC<EdgeProps> = ({
             <div
               className={`react-flow__edge-label-box ${isCurrent ? 'current' : ''} ${isError ? 'error' : ''} ${isSelected ? 'selected' : ''}`}
               aria-current={isSelected ? 'true' : undefined}
+              data-step-group={edgeData?.stepGroupId}
+              data-step-group-current={edgeData?.stepGroupId ? (edgeData?.isCurrentGroup ? 'true' : 'false') : undefined}
               data-selected={isSelected || undefined}
               style={{
                 background: isCurrent ? 'var(--bg-tertiary)' : isSelected ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
@@ -178,6 +178,7 @@ const CustomMessageEdgeInner: React.FC<EdgeProps> = ({
                 borderRadius: '8px',
                 fontSize: '11px',
                 fontWeight: '700',
+                opacity: isDimmed ? 0.12 : 1,
                 boxShadow: isSelected
                   ? `0 0 20px ${strokeColor}55, 0 6px 20px rgba(0,0,0,0.4)`
                   : isCurrent
@@ -193,7 +194,7 @@ const CustomMessageEdgeInner: React.FC<EdgeProps> = ({
               }}
               role="button"
               tabIndex={isSelected ? 0 : -1}
-              aria-label={`Message ${edgeData?.msgType || ''} ${typeof label === 'string' ? label : ''} ${flowsRight ? 'flowing right' : 'flowing left'}${isSelected ? ' (selected)' : ''}`}
+              aria-label={`Message ${edgeData?.msgType || ''} ${typeof label === 'string' ? label : ''} ${flowsForward ? (isVerticalEdge ? 'flowing down' : 'flowing right') : (isVerticalEdge ? 'flowing up' : 'flowing left')}${isSelected ? ' (selected)' : ''}`}
               data-testid={`edge-label-${id}`}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -219,7 +220,7 @@ const CustomMessageEdgeInner: React.FC<EdgeProps> = ({
                     color: isCurrent ? strokeColor : 'var(--text-muted)',
                     flexShrink: 0,
                   }}
-                  aria-label={flowsRight ? 'flows right' : 'flows left'}
+                  aria-label={flowsForward ? (isVerticalEdge ? 'flows down' : 'flows right') : (isVerticalEdge ? 'flows up' : 'flows left')}
                 />
               </div>
 

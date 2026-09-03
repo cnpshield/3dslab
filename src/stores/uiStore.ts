@@ -1,5 +1,5 @@
 import { createExternalStore } from './createStore';
-import type { ProtocolVersion, VisualizationMode } from '../types';
+import type { CanvasOrientation, ProtocolVersion, VisualizationMode } from '../types';
 
 export type Theme = 'dark' | 'light' | 'security';
 export type DetailsKind = 'step' | 'glossary' | 'participant' | 'group' | 'domain';
@@ -22,6 +22,9 @@ export interface DetailsContext {
 export interface UIState {
   theme: Theme;
   visualizationMode: VisualizationMode;
+  canvasOrientation: CanvasOrientation;
+  readingMode: boolean;
+  focusPhase: boolean;
   compareVersion: ProtocolVersion | null;
   isLeftCollapsed: boolean;
   isRightCollapsed: boolean;
@@ -32,11 +35,15 @@ export interface UIState {
   detailsContext: DetailsContext;
   hasLoadedSharedState: boolean;
   showListView: boolean;
+  isShortcutsOpen: boolean;
 }
 
 const initial: UIState = {
   theme: 'light',
   visualizationMode: 'sequence',
+  canvasOrientation: 'vertical',
+  readingMode: false,
+  focusPhase: false,
   compareVersion: '2.1.0',
   isLeftCollapsed: false,
   isRightCollapsed: false,
@@ -47,6 +54,7 @@ const initial: UIState = {
   detailsContext: { kind: 'step', stepId: 'step_0A' },
   hasLoadedSharedState: false,
   showListView: false,
+  isShortcutsOpen: false,
 };
 
 export const uiStore = createExternalStore<UIState>(initial);
@@ -54,6 +62,17 @@ export const uiStore = createExternalStore<UIState>(initial);
 export const uiActions = {
   setTheme: (theme: Theme) => uiStore.setState({ theme }),
   setVisualizationMode: (visualizationMode: VisualizationMode) => uiStore.setState({ visualizationMode }),
+  setCanvasOrientation: (canvasOrientation: CanvasOrientation) => uiStore.setState({ canvasOrientation }),
+  setReadingMode: (readingMode: boolean) => uiStore.setState({ readingMode }),
+  toggleReadingMode: () => uiStore.setState((s) => ({ readingMode: !s.readingMode })),
+  setFocusPhase: (focusPhase: boolean) => uiStore.setState({ focusPhase }),
+  toggleFocusPhase: () => uiStore.setState((s) => ({ focusPhase: !s.focusPhase })),
+  toggleCanvasOrientation: () =>
+    uiStore.setState((s) => ({
+      canvasOrientation: s.canvasOrientation === 'vertical' ? 'horizontal' : 'vertical',
+    })),
+  setShortcutsOpen: (isShortcutsOpen: boolean) => uiStore.setState({ isShortcutsOpen }),
+  toggleShortcuts: () => uiStore.setState((s) => ({ isShortcutsOpen: !s.isShortcutsOpen })),
   setCompareVersion: (compareVersion: ProtocolVersion | null) => uiStore.setState({ compareVersion }),
   cycleTheme: () =>
     uiStore.setState((s) => {

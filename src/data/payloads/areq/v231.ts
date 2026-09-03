@@ -45,7 +45,7 @@ export const buildAReq_v231: PayloadBuilder = (scenario: Scenario) => {
     threeDSRequestorID: 'REQ-MERCH-001',
     threeDSRequestorURL: 'https://merchant.example.com/checkout',
     notificationURL: 'https://gateway.payment.com/3ds-notify_url',
-    // v2.3.1: array of strings. '01' = no preference / prefer frictionless.
+    // v2.3.1: array of strings. '01' = No preference (per §A.5.4 Table A.1).
     threeDSRequestorChallengeInd: ['01'],
     threeDSCompInd,
     deviceChannel: '02',
