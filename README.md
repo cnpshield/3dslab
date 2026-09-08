@@ -2,7 +2,7 @@
 
 <img src="./public/brandmark.svg" alt="EMV 3DS Protocol Lab logo" width="96" height="96" />
 
-# EMV 3-D Secure Protocol Lab
+# EMV® 3-D Secure Protocol Lab
 
 **An open, vendor-neutral interactive reference for visualising, comparing,
 and debugging EMV 3-D Secure (3DS) browser and app flows across published
